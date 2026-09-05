@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect } from 'react';
+import primaryLogo from '../images/brand/cookii-logo-primary.jpg';
 import {
   BadgeDollarSign,
   ChefHat,
@@ -174,12 +175,17 @@ export default function Home() {
       </section>
 
       <section className="marquee" aria-label="Baked fresh, made with care">
-        <div>
-          <span>Made with care</span><b>✦</b>
-          <span>Baked fresh</span><b>✦</b>
-          <span>Soft-centred</span><b>✦</b>
-          <span>Made with care</span><b>✦</b>
-          <span>Baked fresh</span><b>✦</b>
+        <div className="marquee-track">
+          <div className="marquee-set">
+            <span>Made with care</span><b>✦</b>
+            <span>Baked fresh</span><b>✦</b>
+            <span>Soft-centred</span><b>✦</b>
+          </div>
+          <div className="marquee-set" aria-hidden="true">
+            <span>Made with care</span><b>✦</b>
+            <span>Baked fresh</span><b>✦</b>
+            <span>Soft-centred</span><b>✦</b>
+          </div>
         </div>
       </section>
 
@@ -281,7 +287,9 @@ export default function Home() {
       </section>
 
       <footer>
-        <a className="footer-mark" href="#top">Cookii</a>
+        <a className="footer-logo-link" href="#top" aria-label="Cookii by Talya, back to top">
+          <Image className="footer-logo" src={primaryLogo} alt="Cookii by Talya" fill sizes="14rem" />
+        </a>
         <p>Home-baked cookies by Talya.</p>
         <a href="#top">Back to top ↑</a>
       </footer>
