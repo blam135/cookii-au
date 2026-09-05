@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect } from 'react';
-import primaryLogo from '../images/brand/cookii-logo-primary.jpg';
+import primaryLogo from '../images/brand/cookii-logo-primary-transparent.png';
 import {
   BadgeDollarSign,
   ChefHat,
@@ -125,8 +125,13 @@ export default function Home() {
     <main>
       <header className="site-header">
         <a className="wordmark" href="#top" aria-label="Cookii by Talya, home">
-          <span className="wordmark-name">Cookii</span>
-          <span className="wordmark-by">by Talya</span>
+          <Image
+            className="wordmark-logo"
+            src={primaryLogo}
+            alt=""
+            sizes="(max-width: 620px) 8.75rem, 10rem"
+            priority
+          />
         </a>
         <nav aria-label="Main navigation">
           <a href="#menu">Menu</a>
@@ -138,9 +143,15 @@ export default function Home() {
       <section className="hero" id="top">
         <div className="hero-copy">
           <p className="eyebrow hero-kicker">Home baked · made to order</p>
-          <div className="hero-brand" aria-label="Cookii by Talya">
-            <h1>Cookii<span aria-hidden="true">✦</span></h1>
-            <p>by Talya</p>
+          <div className="hero-brand">
+            <h1>
+              <Image
+                className="hero-logo"
+                src={primaryLogo}
+                alt="Cookii by Talya"
+                sizes="(max-width: 900px) calc(100vw - 2.5rem), 36rem"
+              />
+            </h1>
           </div>
           <p className="hero-tagline">
             A little joy,
