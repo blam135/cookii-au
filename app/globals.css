@@ -186,9 +186,9 @@ footer > a:last-child { justify-self: end; font-family: var(--font-mono); font-s
   .price-list { grid-column: 1; grid-template-columns: 1fr; }
   .price-list .batch-price { grid-column: auto; }
   .order-masthead { margin-bottom: 2.5rem; }
-  .order-notes article { grid-template-columns: 2.3rem 3.4rem 1fr; gap: .85rem; min-height: 11rem; padding: 1.5rem 0; }
-  .order-word { font-size: 1.25rem; }
-  .order-icon { width: 2.75rem; }
+  .order-notes article { grid-template-columns: 3.4rem 1fr; align-items: start; gap: .75rem; min-height: 0; padding: 1.5rem 0; }
+  .order-word { display: none; }
+  .order-icon { align-self: start; width: 2.75rem; margin-top: .1rem; }
   .order-notes li { font-size: 1rem; line-height: 1.42; }
   footer { gap: 1rem; }
   .footer-logo-link { width: 10rem; height: 3.75rem; }

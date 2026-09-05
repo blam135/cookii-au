@@ -66,7 +66,6 @@ const orderNotes = [
     title: 'Availability',
     Icon: ChefHat,
     points: [
-      'Orders usually open at the end of school terms and during school holidays.',
       'Availability may vary depending on Talya’s schedule.',
       'When pre-orders are open, an Instagram post or story will be shared.',
     ],
