@@ -185,10 +185,13 @@ footer > a:last-child { justify-self: end; font-family: var(--font-mono); font-s
   .flavour-copy { grid-column: 1; }
   .price-list { grid-column: 1; grid-template-columns: 1fr; }
   .price-list .batch-price { grid-column: auto; }
-  .order-masthead { margin-bottom: 2.5rem; }
-  .order-notes article { grid-template-columns: 3.4rem 1fr; align-items: start; gap: .75rem; min-height: 0; padding: 1.5rem 0; }
+  .order-masthead { margin-bottom: 2.5rem; text-align: center; }
+  .order-notes article { grid-template-columns: 1fr; align-items: start; gap: .65rem; min-height: 0; padding: 1.5rem 0; }
   .order-word { display: none; }
-  .order-icon { align-self: start; width: 2.75rem; margin-top: .1rem; }
+  .order-icon { justify-self: center; width: 2.75rem; margin-top: 0; }
+  .order-note-copy { width: 100%; }
+  .order-notes h3 { margin-bottom: .75rem; text-align: center; }
+  .order-notes ul { padding-left: 1.35rem; }
   .order-notes li { font-size: 1rem; line-height: 1.42; }
   footer { gap: 1rem; }
   .footer-logo-link { width: 10rem; height: 3.75rem; }
