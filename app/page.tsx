@@ -19,7 +19,12 @@ const flavours = [
     number: '01',
     name: 'Classic chocolate chunk',
     note: 'The original — golden, soft-centred and loaded with chocolate chunks.',
-    batch: '$30',
+    prices: [
+      ['1 cookii', '$2.50'],
+      ['5 cookiis', '$10'],
+      ['10 cookiis', '$18'],
+    ],
+    batch: '$25',
     tone: 'classic',
     image: assetPath('/classic-chocolate-original.jpg'),
     alt: 'Classic chocolate chunk cookies cooling on a wire rack',
@@ -28,7 +33,12 @@ const flavours = [
     number: '02',
     name: 'Brown butter chocolate chunk',
     note: 'Deep, nutty brown butter with generous pockets of chocolate.',
-    batch: '$30',
+    prices: [
+      ['1 cookii', '$3'],
+      ['5 cookiis', '$12'],
+      ['10 cookiis', '$22'],
+    ],
+    batch: '$32',
     tone: 'brown-butter',
     image: assetPath('/brown-butter-original.jpg'),
     alt: 'Brown butter chocolate chunk cookies beside a vase of pink flowers',
@@ -37,18 +47,16 @@ const flavours = [
     number: '03',
     name: 'Matcha white chocolate',
     note: 'Earthy matcha balanced with creamy white chocolate pieces.',
-    batch: '$40',
+    prices: [
+      ['1 cookii', '$4.50'],
+      ['5 cookiis', '$20'],
+      ['10 cookiis', '$38'],
+    ],
+    batch: '$55',
     tone: 'matcha',
     image: assetPath('/matcha-original.jpg'),
     alt: 'Matcha white chocolate cookies served on a dark ceramic plate',
   },
-];
-
-const standardPrices = [
-  ['1 cookii', '$2'],
-  ['2 cookiis', '$4'],
-  ['5 cookiis', '$10'],
-  ['10 cookiis', '$20'],
 ];
 
 const orderNotes = [
@@ -263,14 +271,14 @@ export default function Home() {
                 <p>{flavour.note}</p>
               </div>
               <dl className="price-list">
-                {standardPrices.map(([quantity, price]) => (
+                {flavour.prices.map(([quantity, price]) => (
                   <div key={quantity}>
                     <dt>{quantity}</dt>
                     <dd>{price}</dd>
                   </div>
                 ))}
                 <div className="batch-price">
-                  <dt>Whole batch</dt>
+                  <dt>Whole batch (~16 cookiis)</dt>
                   <dd>{flavour.batch}</dd>
                 </div>
               </dl>
