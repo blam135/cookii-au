@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import primaryLogo from '../images/brand/cookii-logo-primary-transparent.png';
 import {
   BadgeDollarSign,
@@ -103,6 +103,8 @@ const orderNotes = [
 ];
 
 export default function Home() {
+  const [showHeaderLogo, setShowHeaderLogo] = useState(false);
+
   useEffect(() => {
     const elements = document.querySelectorAll<HTMLElement>('[data-reveal]');
     const observer = new IntersectionObserver(
@@ -121,10 +123,40 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const marquee = document.getElementById('marquee');
+    if (!marquee) return;
+
+    let animationFrame = 0;
+    const updateHeaderLogo = () => {
+      animationFrame = 0;
+      setShowHeaderLogo(marquee.getBoundingClientRect().top <= 0);
+    };
+    const scheduleUpdate = () => {
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(updateHeaderLogo);
+    };
+
+    updateHeaderLogo();
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+
+    return () => {
+      window.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
+  }, []);
+
   return (
     <main>
       <header className="site-header">
-        <a className="wordmark" href="#top" aria-label="Cookii by Talya, home">
+        <a
+          className={`wordmark${showHeaderLogo ? ' is-visible' : ''}`}
+          href="#top"
+          aria-label="Cookii by Talya, home"
+          aria-hidden={!showHeaderLogo}
+          tabIndex={showHeaderLogo ? undefined : -1}
+        >
           <Image
             className="wordmark-logo"
             src={primaryLogo}
@@ -185,7 +217,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="marquee" aria-label="Baked fresh, made with care">
+      <section className="marquee" id="marquee" aria-label="Baked fresh, made with care">
         <div className="marquee-track">
           <div className="marquee-set">
             <span>Made with care</span><b>✦</b>

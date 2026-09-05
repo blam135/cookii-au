@@ -44,7 +44,8 @@ main { overflow: hidden; }
 }
 
 .wordmark, .site-header nav { background: linear-gradient(135deg, rgba(255,255,255,.3), rgba(248,241,232,.08)); border: 1px solid rgba(255,255,255,.38); -webkit-backdrop-filter: blur(16px) saturate(135%); backdrop-filter: blur(16px) saturate(135%); box-shadow: inset 0 1px 0 rgba(255,255,255,.46), inset 0 -1px 0 rgba(35,31,27,.04), 0 10px 30px rgba(54,39,26,.08); }
-.wordmark { position: relative; display: block; padding: .45rem .65rem; border-radius: 1.2rem; }
+.wordmark { position: relative; display: block; padding: .45rem .65rem; border-radius: 1.2rem; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-.75rem); transition: opacity 240ms ease, transform 240ms ease, visibility 0s linear 240ms; }
+.wordmark.is-visible { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); transition-delay: 0s; }
 .wordmark-logo { display: block; width: 10rem; height: auto; }
 .site-header nav { display: flex; align-items: center; gap: clamp(1rem, 2.5vw, 2.5rem); padding: .5rem; padding-left: 1.3rem; border-radius: 999px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
 .site-header nav a { transition: opacity 200ms ease, transform 200ms ease; }
