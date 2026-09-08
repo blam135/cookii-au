@@ -26,7 +26,7 @@ const flavours = [
     ],
     batch: '$25',
     tone: 'classic',
-    image: assetPath('/classic-chocolate-original.jpg'),
+    image: assetPath('/images/menu/classic-chocolate-chunk.jpg'),
     alt: 'Classic chocolate chunk cookies cooling on a wire rack',
   },
   {
@@ -40,7 +40,7 @@ const flavours = [
     ],
     batch: '$32',
     tone: 'brown-butter',
-    image: assetPath('/brown-butter-original.jpg'),
+    image: assetPath('/images/menu/brown-butter-chocolate-chunk.jpg'),
     alt: 'Brown butter chocolate chunk cookies beside a vase of pink flowers',
   },
   {
@@ -54,7 +54,7 @@ const flavours = [
     ],
     batch: '$55',
     tone: 'matcha',
-    image: assetPath('/matcha-original.jpg'),
+    image: assetPath('/images/menu/matcha-white-chocolate.jpg'),
     alt: 'Matcha white chocolate cookies served on a dark ceramic plate',
   },
 ];
@@ -210,8 +210,8 @@ export default function Home() {
         <div className="hero-image-wrap" aria-label="Freshly baked Cookii cookies">
           <Image
             className="hero-image"
-            src={assetPath('/cookii-kitchen-original.jpg')}
-            alt="Freshly baked chocolate chunk and matcha cookies cooling in Talya’s home kitchen"
+            src={assetPath('/images/hero/cookies-and-flowers.jpg')}
+            alt="Freshly baked chocolate chunk cookies cooling beside pink flowers"
             fill
             priority
             sizes="(max-width: 800px) 100vw, 55vw"
