@@ -6,6 +6,13 @@ Submitted reviews are stored only in this browser using `cookii-demo-reviews-v1`
 
 ## Screenshots and animation
 
+### Full website walkthroughs
+
+- [Desktop walkthrough — 1440 × 900](desktop-walkthrough.mp4)
+- [Mobile walkthrough — 390 × 844](mobile-walkthrough.mp4)
+
+These continuous, uncut recordings start with a fresh browser loading the locally served production static export. Each scrolls through the whole website to the footer, returns to the review form, selects four stars, types and submits a review, shows the new review, and refreshes to confirm browser persistence. Mobile uses Chromium's touch-enabled mobile viewport emulation. There is no audio.
+
 ![Desktop review section](desktop.png)
 
 ![Submitted demo review](submitted.png)
