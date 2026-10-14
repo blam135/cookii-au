@@ -102,8 +102,8 @@ const orderNotes = [
     title: 'Packaging & order pickup',
     Icon: PackageOpen,
     points: [
-      'Cookies are packaged in plastic containers or pouches.',
-      'Custom order pickups are on Mondays unless arranged otherwise.',
+      'Cookies are packaged in food-safe cardboard boxes or pouches.',
+      'Custom order pickups are arranged upon order.',
       'Please message for more information about collecting your order.',
     ],
   },
