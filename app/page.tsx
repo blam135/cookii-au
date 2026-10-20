@@ -20,11 +20,10 @@ const flavours = [
     name: 'Classic chocolate chunk',
     note: 'The original — golden, soft-centred and loaded with chocolate chunks.',
     prices: [
-      ['1 cookii', '$2.50'],
-      ['5 cookiis', '$10'],
-      ['10 cookiis', '$18'],
+      ['4 cookiis', '$10 ($2.50 each)'],
+      ['8 cookiis', '$18 ($2.25 each)'],
+      ['16 cookiis', '$28 ($1.75 each)'],
     ],
-    batch: '$25',
     tone: 'classic',
     image: assetPath('/images/menu/classic-chocolate-chunk.jpg'),
     alt: 'Classic chocolate chunk cookies cooling on a wire rack',
@@ -34,11 +33,10 @@ const flavours = [
     name: 'Brown butter chocolate chunk',
     note: 'Deep, nutty brown butter with generous pockets of chocolate.',
     prices: [
-      ['1 cookii', '$3'],
-      ['5 cookiis', '$12'],
-      ['10 cookiis', '$22'],
+      ['4 cookiis', '$12 ($3 each)'],
+      ['8 cookiis', '$20 ($2.50 each)'],
+      ['16 cookiis', '$32 ($2 each)'],
     ],
-    batch: '$32',
     tone: 'brown-butter',
     image: assetPath('/images/menu/brown-butter-chocolate-chunk.jpg'),
     alt: 'Brown butter chocolate chunk cookies beside a vase of pink flowers',
@@ -48,11 +46,10 @@ const flavours = [
     name: 'Matcha white chocolate',
     note: 'Earthy matcha balanced with creamy white chocolate pieces.',
     prices: [
-      ['1 cookii', '$4.50'],
-      ['5 cookiis', '$20'],
-      ['10 cookiis', '$38'],
+      ['4 cookiis', '$18 ($4.50 each)'],
+      ['8 cookiis', '$30 ($3.75 each)'],
+      ['16 cookiis', '$44 ($2.75 each)'],
     ],
-    batch: '$55',
     tone: 'matcha',
     image: assetPath('/images/menu/matcha-white-chocolate.jpg'),
     alt: 'Matcha white chocolate cookies served on a dark ceramic plate',
@@ -277,10 +274,6 @@ export default function Home() {
                     <dd>{price}</dd>
                   </div>
                 ))}
-                <div className="batch-price">
-                  <dt>Whole batch (~16 cookiis)</dt>
-                  <dd>{flavour.batch}</dd>
-                </div>
               </dl>
             </article>
           ))}
