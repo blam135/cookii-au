@@ -48,7 +48,7 @@ const flavours = [
     prices: [
       ['4 cookiis', '$18'],
       ['8 cookiis', '$30'],
-      ['16 cookiis', '$44'],
+      ['16 cookiis', '$40'],
     ],
     tone: 'matcha',
     image: assetPath('/images/menu/matcha-white-chocolate.jpg'),
