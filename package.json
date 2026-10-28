@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "dev": "next dev",
@@ -40,5 +40,8 @@
     "oxlint-tsgolint": "7.0.2004",
     "typescript": "7.0.2"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "undici": "^7.30.1"
+  }
 }
