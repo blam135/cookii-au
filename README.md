@@ -27,4 +27,4 @@ No environment variables are required. The repository name is detected automatic
 npm run build
 ```
 
-The project targets Node.js 22 and self-hosts its fonts, so production builds do not depend on Google Fonts being reachable.
+Use `nvm use` to select the patched Node.js version in `.nvmrc`. Supported Node.js versions are 22.23.4+, 24.22.1+, and 26.12.1+ within those major releases; npm enforces these minimums. The project self-hosts its fonts, so production builds do not depend on Google Fonts being reachable.
