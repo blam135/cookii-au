@@ -1,5 +1,7 @@
 # Review section preview
 
+> Historical demo screenshots and recordings. The live implementation now uses Supabase; see the root README for setup. The browser-only behavior below describes the original preview.
+
 An interactive demo above the footer: three clearly labelled sample reviews, a star rating picker, and a review form. New cards animate into the list; stars and cards respond to hover. The layout stacks on mobile and respects reduced-motion preferences.
 
 Submitted reviews are stored only in this browser using `cookii-demo-reviews-v1` in local storage (up to 20 entries). They are not sent to a server or shared with other visitors. If browser storage is blocked, submissions work for the current visit. Shared persistence can be added later.

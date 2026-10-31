@@ -1,24 +1,9 @@
 'use client';
 
-import { useEffect, useState, type SubmitEvent } from 'react';
-import { ArrowUpRight, Check, Star } from 'lucide-react';
+import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { ArrowUpRight, Star } from 'lucide-react';
 
-type Review = { id: string; name: string; rating: number; text: string };
-const storageKey = 'cookii-demo-reviews-v1';
-const samples: Review[] = [
-  { id: 'sample-1', name: 'Sophie', rating: 5, text: 'The brown butter ones barely made it home. Crispy edges, soft middles, and so much chocolate. Already dreaming about the next batch.' },
-  { id: 'sample-2', name: 'James', rating: 5, text: 'Brought a box to a picnic and came home with an empty container. The classic chocolate chunk is a crowd favourite for a reason.' },
-  { id: 'sample-3', name: 'Amelia', rating: 4, text: 'The matcha and white chocolate combo is such a lovely little treat. Beautifully packed, too — perfect with an afternoon cup of tea.' },
-];
-
-function isReview(value: unknown): value is Review {
-  if (!value || typeof value !== 'object') return false;
-  const review = value as Partial<Review>;
-  return typeof review.id === 'string' && typeof review.name === 'string' &&
-    review.name.trim().length > 0 && review.name.length <= 40 &&
-    typeof review.text === 'string' && review.text.trim().length > 0 && review.text.length <= 400 &&
-    typeof review.rating === 'number' && Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5;
-}
+import { ReviewError, isReviewInput, loadReviews, reviewsConfigured, saveReview, type Review } from '@/lib/reviews';
 
 export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -26,41 +11,53 @@ export default function Reviews() {
   const [hovered, setHovered] = useState(0);
   const [status, setStatus] = useState('');
 
+  const [loading, setLoading] = useState(reviewsConfigured);
+  const [loadError, setLoadError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const saving = useRef(false);
+
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      try {
-        const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
-        if (Array.isArray(stored)) setReviews(stored.filter(isReview).slice(0, 20));
-      } catch {
-        // A blocked or invalid browser store shouldn't prevent trying the demo.
-      }
+    if (!reviewsConfigured) return;
+    let active = true;
+    loadReviews().then((loaded) => {
+      if (active) setReviews((current) => [...current, ...loaded.filter((row) => !current.some((item) => item.id === row.id))].slice(0, 20));
+    }).catch(() => {
+      if (active) setLoadError(true);
+    }).finally(() => {
+      if (active) setLoading(false);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => { active = false; };
   }, []);
 
-  function submit(event: SubmitEvent<HTMLFormElement>) {
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving.current || !reviewsConfigured) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const nameField = fields.get('name');
     const textField = fields.get('review');
     const name = typeof nameField === 'string' ? nameField.trim() : '';
     const text = typeof textField === 'string' ? textField.trim() : '';
-    if (!name || !text) {
+    if (!isReviewInput({ name, text, rating })) {
       setStatus('Please add your name and a few words about your cookies.');
       return;
     }
-    const next = [{ id: crypto.randomUUID(), name, text, rating }, ...reviews].slice(0, 20);
-    setReviews(next);
+    saving.current = true;
+    setSubmitting(true);
+    setStatus('');
     try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      setStatus('A little sweetness, shared. Your demo review is saved in this browser.');
-    } catch {
-      setStatus('A little sweetness, shared. Your demo review will stay until you refresh.');
+      const saved = await saveReview({ name, text, rating });
+      setReviews((current) => [saved, ...current].slice(0, 20));
+      setStatus('A little sweetness, shared. Your review has been published.');
+      form.reset();
+      setRating(5);
+      setHovered(0);
+    } catch (error) {
+      setStatus(error instanceof ReviewError && [409, 429].includes(error.status) ? error.message : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.');
+    } finally {
+      saving.current = false;
+      setSubmitting(false);
     }
-    form.reset();
-    setRating(5);
-    setHovered(0);
   }
 
   return (
@@ -70,17 +67,20 @@ export default function Reviews() {
           <p className="eyebrow">Little notes, big smiles</p>
           <h2 id="reviews-heading">Sweet words.<br /><em>Happy crumbs.</em></h2>
         </div>
-        <p>A few kind words from the cookie jar.<br /><span className="reviews-demo-label">Sample reviews · UI preview</span></p>
+        <p>A few kind words from the cookie jar.</p>
       </div>
       <div className="reviews-layout">
         <div className="review-list" aria-label="Cookie reviews">
-          {[...reviews, ...samples].map((review) => (
+          {loading && <output>Loading sweet words…</output>}
+          {loadError && <output>We couldn’t load reviews. Please refresh to try again.</output>}
+          {!loading && !loadError && reviews.length === 0 && <p>{reviewsConfigured ? 'Be the first to share your cookie moment.' : 'Reviews are coming soon.'}</p>}
+          {reviews.map((review) => (
             <article className="review-card" key={review.id}>
               <div className="review-card-top">
                 <span className="review-stars" aria-label={`${review.rating} out of 5 stars`}>
                   {[1, 2, 3, 4, 5].map((star) => <Star key={star} size={16} fill={star <= review.rating ? 'currentColor' : 'none'} aria-hidden="true" />)}
                 </span>
-                <span className="review-kind">{review.id.startsWith('sample-') ? 'Sample review' : 'Your demo review'}</span>
+                <span className="review-kind">Customer review</span>
               </div>
               <blockquote>“{review.text}”</blockquote>
               <p className="review-author"><span aria-hidden="true">{review.name.slice(0, 1).toUpperCase()}</span>{review.name}</p>
@@ -91,7 +91,7 @@ export default function Reviews() {
           <span className="review-form-flourish" aria-hidden="true">✦</span>
           <h3>Had a little bite?</h3>
           <p>Leave a little love.</p>
-          <fieldset className="review-rating">
+          <fieldset className="review-rating" disabled={submitting || !reviewsConfigured}>
             <legend>Your rating</legend>
             <div>
               {[1, 2, 3, 4, 5].map((star) => (
@@ -102,11 +102,11 @@ export default function Reviews() {
               ))}
             </div>
           </fieldset>
-          <label className="review-field">Your name<input name="name" placeholder="First name is lovely" maxLength={40} required autoComplete="name" /></label>
-          <label className="review-field">Your cookie moment<textarea name="review" placeholder="The flavour, the first bite, the empty box…" rows={4} maxLength={400} required /></label>
-          <button className="button button-dark" type="submit">Share a little love <ArrowUpRight size={17} aria-hidden="true" /></button>
-          <p className="review-storage-note">Just a demo for now. Your reviews stay in this browser, with no public posting.</p>
-          <output className="review-status">{status && <><Check size={16} aria-hidden="true" />{status}</>}</output>
+          <label className="review-field">Your name<input disabled={submitting || !reviewsConfigured} name="name" placeholder="First name is lovely" maxLength={40} required autoComplete="name" /></label>
+          <label className="review-field">Your cookie moment<textarea disabled={submitting || !reviewsConfigured} name="review" placeholder="The flavour, the first bite, the empty box…" rows={4} maxLength={400} required /></label>
+          <button className="button button-dark" type="submit" disabled={submitting || !reviewsConfigured}>{submitting ? 'Sharing…' : 'Share a little love'} <ArrowUpRight size={17} aria-hidden="true" /></button>
+          <p className="review-storage-note">{reviewsConfigured ? 'Your name, rating, and review will be visible to everyone.' : 'Review submissions will open soon.'}</p>
+          <output className="review-status">{status}</output>
         </form>
       </div>
     </section>

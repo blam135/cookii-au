@@ -251,3 +251,5 @@ footer > a:last-child { justify-self: end; font-family: var(--font-mono); font-s
   [data-reveal] { opacity: 1; transform: none; }
   .marquee-track { transform: none !important; }
 }
+
+.review-form .button:disabled { opacity: .6; cursor: not-allowed; }
