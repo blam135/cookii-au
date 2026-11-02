@@ -26,7 +26,7 @@ const flavours = [
     ],
     tone: 'classic',
     image: assetPath('/images/menu/classic-chocolate-chunk.jpg'),
-    alt: 'Classic chocolate chunk cookies cooling on a wire rack',
+    alt: 'Scoops of classic chocolate chunk cookie dough with chocolate pieces',
   },
   {
     number: '02',
@@ -39,7 +39,7 @@ const flavours = [
     ],
     tone: 'brown-butter',
     image: assetPath('/images/menu/brown-butter-chocolate-chunk.jpg'),
-    alt: 'Brown butter chocolate chunk cookies beside a vase of pink flowers',
+    alt: 'Scoops of brown butter cookie dough with generous chocolate chunks',
   },
   {
     number: '03',
