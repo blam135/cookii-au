@@ -36,3 +36,12 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Backend dependencies, state, credentials and test output
+/backend/node_modules/
+/backend/.wrangler/
+/backend/.dev.vars*
+!/backend/.env.example
+/backend/playwright-report/
+/backend/test-results/
+/backend/blob-report/
