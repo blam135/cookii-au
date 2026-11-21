@@ -71,6 +71,7 @@ npm run dev --prefix backend -- --local --local-protocol https --port 8787
 Open `https://localhost:8787/reviews` in the browser and trust Wrangler's local development certificate. In the frontend's `.env.local`, set:
 
 ```dotenv
+NEXT_PUBLIC_REVIEWS_ENABLED=true
 NEXT_PUBLIC_REVIEWS_API_URL=https://localhost:8787
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-development-public-site-key
 ```
@@ -135,7 +136,7 @@ Configure these in **Repository Settings → Secrets and variables → Actions**
 | ------------------ | --------------------------------------------------------------------------------------------------------------- |
 | Secrets            | `CLOUDFLARE_API_TOKEN`, `NOTION_TOKEN`, `TURNSTILE_SECRET`, `IP_HASH_SECRET`                                    |
 | Variables          | `CLOUDFLARE_ACCOUNT_ID`, `ALLOWED_ORIGIN`, `TURNSTILE_HOSTNAME`, `NOTION_DATA_SOURCE_ID`, `SUBMISSIONS_ENABLED` |
-| Frontend variables | `NEXT_PUBLIC_REVIEWS_API_URL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`                                                 |
+| Frontend variables | `NEXT_PUBLIC_REVIEWS_ENABLED` (defaults to `false`), `NEXT_PUBLIC_REVIEWS_API_URL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` |
 
 Use a Cloudflare API token scoped to the intended account with permission to deploy Workers (the Edit Cloudflare Workers template is a starting point). The account ID is the 32-character value in the Cloudflare dashboard. Use a Workers Free account; deployment code cannot enforce the billing plan.
 

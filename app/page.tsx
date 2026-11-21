@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import primaryLogo from '../images/brand/cookii-logo-primary-transparent.png';
+import Reviews from './reviews';
+import { featureFlags } from '@/lib/features';
 import {
   BadgeDollarSign,
   ChefHat,
@@ -328,6 +330,8 @@ export default function Home() {
           Message on Instagram
         </a>
       </section>
+
+      {featureFlags.reviews && <Reviews />}
 
       <footer>
         <a className="footer-logo-link" href="#top" aria-label="Cookii by Talya, back to top">
