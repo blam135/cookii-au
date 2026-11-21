@@ -22,7 +22,8 @@ export class TurnstileVerifier implements ChallengeVerifier {
     diagnostics = new RequestDiagnostics(),
   ) {
     this.env = env;
-    this.fetcher = fetcher;
+    // Workers fetch rejects a class instance as its receiver (Illegal invocation).
+    this.fetcher = fetcher.bind(globalThis);
     this.diagnostics = diagnostics;
   }
 
@@ -40,7 +41,7 @@ export class TurnstileVerifier implements ChallengeVerifier {
             remoteip: ip,
           }),
           signal: AbortSignal.timeout(5000),
-          redirect: 'error',
+          redirect: 'manual',
         },
       );
     } catch (error) {
