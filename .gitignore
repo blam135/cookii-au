@@ -28,6 +28,7 @@ yarn-error.log*
 
 # local environment
 .env*
+!/.env.example
 
 # deployment and generated files
 .vercel
@@ -45,3 +46,8 @@ next-env.d.ts
 /backend/playwright-report/
 /backend/test-results/
 /backend/blob-report/
+
+# Frontend Playwright output
+/playwright-report/
+/test-results/
+/blob-report/
