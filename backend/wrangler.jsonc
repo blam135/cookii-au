@@ -14,5 +14,10 @@
     "bindings": [{ "name": "REVIEWS", "class_name": "ReviewsStore" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ReviewsStore"] }],
-  "observability": { "enabled": false },
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+    },
+  },
 }
