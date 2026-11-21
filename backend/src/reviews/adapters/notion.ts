@@ -32,19 +32,33 @@ export class NotionReviewRepository implements ReviewRepository {
   }
 
   private async request<T>(path: string, body: unknown): Promise<T> {
-    const response = await this.fetcher(`https://api.notion.com/v1${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.env.NOTION_TOKEN}`,
-        'Notion-Version': '2025-09-03',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
-      redirect: 'error',
-    });
-    if (!response.ok) throw new Error('Notion unavailable');
-    return response.json<T>();
+    let response: Response;
+    try {
+      response = await this.fetcher(`https://api.notion.com/v1${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.NOTION_TOKEN}`,
+          'Notion-Version': '2025-09-03',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+        redirect: 'error',
+      });
+    } catch {
+      console.error('notion_transport_failed');
+      throw new Error('Notion unavailable');
+    }
+    if (!response.ok) {
+      console.error('notion_request_failed', { status: response.status });
+      throw new Error('Notion unavailable');
+    }
+    try {
+      return await response.json<T>();
+    } catch {
+      console.error('notion_response_invalid');
+      throw new Error('Invalid response');
+    }
   }
 
   private toReview(page: NotionPage): Review | null {

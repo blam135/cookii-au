@@ -24,6 +24,7 @@ export default {
     try {
       response = await route(request, env);
     } catch {
+      console.error('reviews_route_failed');
       response = Response.json(
         { message: 'Reviews temporarily unavailable.' },
         { status: 503 },
