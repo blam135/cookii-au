@@ -35,7 +35,8 @@ export class NotionReviewRepository implements ReviewRepository {
     diagnostics = new RequestDiagnostics(),
   ) {
     this.env = env;
-    this.fetcher = fetcher;
+    // Workers fetch rejects a class instance as its receiver (Illegal invocation).
+    this.fetcher = fetcher.bind(globalThis);
     this.diagnostics = diagnostics;
   }
 
@@ -56,7 +57,7 @@ export class NotionReviewRepository implements ReviewRepository {
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(8000),
-        redirect: 'error',
+        redirect: 'manual',
       });
     } catch (error) {
       this.diagnostics.error({
