@@ -19,6 +19,7 @@ export async function handleCreateReviews(
     if (!ip) return Response.json({}, { status: 403 });
     return reviewResponse(await service.submit(input, ip), 201);
   } catch {
+    console.error('reviews_create_failed');
     return unavailableResponse();
   }
 }

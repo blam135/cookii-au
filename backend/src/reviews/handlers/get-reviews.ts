@@ -7,6 +7,7 @@ export async function handleGetReviews(
   try {
     return reviewResponse(await service.list(), 200);
   } catch {
+    console.error('reviews_read_failed');
     return unavailableResponse();
   }
 }

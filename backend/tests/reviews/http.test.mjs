@@ -176,6 +176,7 @@ test('create handler rejects malformed JSON and missing client IP before provide
 });
 
 test('read and write handlers return generic errors when providers fail', async () => {
+  mock.method(console, 'error', () => {});
   mock.method(globalThis, 'fetch', async () => {
     throw new Error('Private upstream failure details');
   });
@@ -187,4 +188,36 @@ test('read and write handlers return generic errors when providers fail', async 
       message: 'Reviews temporarily unavailable.',
     });
   }
+});
+
+test('Notion rejection logs only its status and a fixed event name', async () => {
+  const logs = [];
+  mock.method(console, 'error', (...args) => logs.push(args));
+  mock.method(globalThis, 'fetch', async () =>
+    Response.json({ message: 'Private upstream details' }, { status: 401 }),
+  );
+  const { store } = setup();
+  const response = await store.fetch(request('GET'));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    message: 'Reviews temporarily unavailable.',
+  });
+  assert.deepEqual(logs, [
+    ['notion_request_failed', { status: 401 }],
+    ['reviews_read_failed'],
+  ]);
+});
+
+test('transport failures log fixed events without exception details', async () => {
+  const logs = [];
+  mock.method(console, 'error', (...args) => logs.push(args));
+  mock.method(globalThis, 'fetch', async () => {
+    throw new Error('Private exception including credentials');
+  });
+  const { store } = setup();
+  assert.equal((await store.fetch(request('GET'))).status, 503);
+  assert.deepEqual(logs, [
+    ['notion_transport_failed'],
+    ['reviews_read_failed'],
+  ]);
 });
