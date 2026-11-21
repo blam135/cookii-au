@@ -1,0 +1,21 @@
+{
+  "name": "cookii-reviews-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "deploy:ci": "node scripts/deploy.ts",
+    "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.scripts.json",
+    "test": "playwright test --project=regression",
+    "test:ui": "playwright test --project=regression --ui"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261121.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "wrangler": "4.166.0",
+    "@playwright/test": "1.65.1"
+  }
+}
