@@ -1,9 +1,21 @@
-name: Deploy to GitHub Pages
+name: Deploy frontend to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ['Deploy backend to Cloudflare Workers']
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package*.json'
+      - 'playwright.config.ts'
+      - 'next.config.ts'
+      - '.env.example'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -11,10 +23,15 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Finish an active deployment before starting the next production run.
+  cancel-in-progress: false
 
 jobs:
   build:
+    name: Test and build frontend
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
     steps:
@@ -22,6 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -32,10 +50,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security regression tests
+        run: npm test
+
       - name: Dependency audit
         run: npm audit --audit-level=low
 
-      - name: Build static site
+      - name: Build frontend static site
+        env:
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_REVIEWS_API_URL: ${{ vars.NEXT_PUBLIC_REVIEWS_API_URL }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact
@@ -43,7 +67,9 @@ jobs:
         with:
           path: ./out
 
-  deploy:
+  deploy-frontend:
+    name: Deploy frontend to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     permissions:
       pages: write
       id-token: write
@@ -59,6 +85,6 @@ jobs:
         with:
           enablement: true
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy frontend to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
