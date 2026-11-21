@@ -9,13 +9,17 @@ export interface Environment {
   IP_HASH_SECRET: string;
 }
 
-export function isConfigured(env: Environment): boolean {
-  return Boolean(
-    env.NOTION_TOKEN &&
-    env.NOTION_DATA_SOURCE_ID &&
-    env.TURNSTILE_SECRET &&
-    env.IP_HASH_SECRET &&
-    env.ALLOWED_ORIGIN &&
-    env.TURNSTILE_HOSTNAME,
-  );
+const requiredSettings = [
+  'NOTION_TOKEN',
+  'NOTION_DATA_SOURCE_ID',
+  'TURNSTILE_SECRET',
+  'IP_HASH_SECRET',
+  'ALLOWED_ORIGIN',
+  'TURNSTILE_HOSTNAME',
+] as const satisfies readonly (keyof Environment)[];
+
+export type RequiredSetting = (typeof requiredSettings)[number];
+
+export function missingConfiguration(env: Environment): RequiredSetting[] {
+  return requiredSettings.filter((key) => !env[key]);
 }

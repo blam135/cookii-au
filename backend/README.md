@@ -8,6 +8,7 @@ A Cloudflare Workers service for the Cookii website. It provides public API endp
 src/
   index.ts                 Worker entry point and composition
   config.ts                Cloudflare bindings and configuration checks
+  diagnostics.ts           Structured events and request correlation
   reviews/
     model.ts               Review types, outcomes and validation functions
     ports.ts               Repository, verification and state interfaces
@@ -78,15 +79,15 @@ Run `npm run dev` from the repository root and open `http://localhost:3000`. Loc
 
 ## Configuration
 
-| Setting | Purpose |
-| --- | --- |
-| `ALLOWED_ORIGIN` | Exact frontend origin, without a path or trailing slash |
-| `TURNSTILE_HOSTNAME` | Expected website hostname for verification |
-| `NOTION_DATA_SOURCE_ID` | Fixed review data source |
-| `SUBMISSIONS_ENABLED` | Set `true` to accept submissions; defaults to `false` |
-| `NOTION_TOKEN` | Private Notion integration token |
-| `TURNSTILE_SECRET` | Private Turnstile verification key |
-| `IP_HASH_SECRET` | Random secret of at least 32 bytes for daily IP hashing |
+| Setting                 | Purpose                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `ALLOWED_ORIGIN`        | Exact frontend origin, without a path or trailing slash |
+| `TURNSTILE_HOSTNAME`    | Expected website hostname for verification              |
+| `NOTION_DATA_SOURCE_ID` | Fixed review data source                                |
+| `SUBMISSIONS_ENABLED`   | Set `true` to accept submissions; defaults to `false`   |
+| `NOTION_TOKEN`          | Private Notion integration token                        |
+| `TURNSTILE_SECRET`      | Private Turnstile verification key                      |
+| `IP_HASH_SECRET`        | Random secret of at least 32 bytes for daily IP hashing |
 
 For manual deployment, non-secret settings belong in `wrangler.jsonc` and private credentials are set with `npx wrangler secret put <NAME>` from `backend/`. Use the ignored `.dev.vars` file locally. The GitHub pipeline supplies production values from repository settings as described below.
 
@@ -103,17 +104,38 @@ Deployment requires Cloudflare authentication. Keep the Durable Object name/bind
 
 Run `npm run typecheck --prefix backend` for strict Worker/deployment TypeScript checks and `npm test --prefix backend` for the backend Playwright regression project. Live integration checks require the configured services; mocked tests do not verify deployed permissions or availability.
 
+## Troubleshooting requests
+
+After deployment, run `curl -i https://api.cookii-au.workers.dev/reviews -H 'Origin: https://cookii.au'`. Copy the returned `X-Request-Id`, then find the matching `requestId` in **Cloudflare → Workers & Pages → api → Observability → Logs**. Worker and Durable Object events share that ID, including failures. The Worker generates a fresh ID for every request and replaces client-supplied IDs.
+
+| Event                                                                        | Meaning                                                                                                                          |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `reviews_configuration_missing`                                              | Lists missing setting names only; check GitHub configuration and redeploy                                                        |
+| `reviews_submissions_paused`                                                 | `SUBMISSIONS_ENABLED` is not `true`                                                                                              |
+| `reviews_binding_missing`, `reviews_dispatch_failed`, `reviews_store_failed` | Missing Durable Object binding, failed dispatch, or failed object concurrency boundary                                           |
+| `reviews_storage_failed`                                                     | Identifies `get`/`put` and `cache`/`budget`, without stored values                                                               |
+| `reviews_cache_checked`, `reviews_quota_rejected`                            | Cache state or the quota that prevented an upstream request                                                                      |
+| `notion_transport_failed`                                                    | Query/create transport error; includes a fixed error category and duration                                                       |
+| `notion_request_failed`                                                      | Query/create HTTP status, allowlisted Notion error code and duration; 401: token, 403: permissions, 404: source ID or connection |
+| `notion_request_completed`, `notion_response_invalid`                        | Notion HTTP success, followed by JSON/results/page validation failure if processing fails                                        |
+| `notion_reviews_loaded`                                                      | Counts accepted and skipped rows; skipped rows may not match the expected review schema                                          |
+| `turnstile_failed`, `turnstile_rejected`                                     | Verification service failure or challenge/hostname/action mismatch                                                               |
+| `reviews_read_failed`, `reviews_create_failed`, `reviews_route_failed`       | Final failure boundary; inspect earlier events with the same request ID                                                          |
+| `reviews_request_completed`                                                  | GET/POST response status and total Worker duration                                                                               |
+
+Application logs contain fixed event names, generated request IDs, setting names, numeric timings/statuses/counts and allowlisted categories. They exclude tokens, IPs and their hashes, review contents, Notion IDs, URLs, raw exceptions, headers and upstream response bodies. Unknown Notion error codes become `unknown`; public error bodies remain generic. Logging adds events to the existing Workers Logs service, with its account retention/ingestion limits; existing request and submission quotas remain in force. No new settings or paid services are required.
+
 ## GitHub deployment
 
 The `Deploy backend to Cloudflare Workers` workflow runs backend tests, typechecks, audit and bundle validation on pull requests. Pushes/merges to `main` and manual dispatch also deploy the backend after these checks pass. Deployments are serialized rather than cancelled mid-upload. The frontend workflow can wait for a successful backend push deployment before publishing the website.
 
 Configure these in **Repository Settings → Secrets and variables → Actions**:
 
-| Type | Names |
-| --- | --- |
-| Secrets | `CLOUDFLARE_API_TOKEN`, `NOTION_TOKEN`, `TURNSTILE_SECRET`, `IP_HASH_SECRET` |
-| Variables | `CLOUDFLARE_ACCOUNT_ID`, `ALLOWED_ORIGIN`, `TURNSTILE_HOSTNAME`, `NOTION_DATA_SOURCE_ID`, `SUBMISSIONS_ENABLED` |
-| Frontend variables | `NEXT_PUBLIC_REVIEWS_API_URL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` |
+| Type               | Names                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Secrets            | `CLOUDFLARE_API_TOKEN`, `NOTION_TOKEN`, `TURNSTILE_SECRET`, `IP_HASH_SECRET`                                    |
+| Variables          | `CLOUDFLARE_ACCOUNT_ID`, `ALLOWED_ORIGIN`, `TURNSTILE_HOSTNAME`, `NOTION_DATA_SOURCE_ID`, `SUBMISSIONS_ENABLED` |
+| Frontend variables | `NEXT_PUBLIC_REVIEWS_API_URL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`                                                 |
 
 Use a Cloudflare API token scoped to the intended account with permission to deploy Workers (the Edit Cloudflare Workers template is a starting point). The account ID is the 32-character value in the Cloudflare dashboard. Use a Workers Free account; deployment code cannot enforce the billing plan.
 

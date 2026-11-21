@@ -1,10 +1,12 @@
 import { readJsonBody, reviewResponse, unavailableResponse } from '../http';
 import type { ReviewService } from '../service';
 import { parseSubmission } from '../submission';
+import { RequestDiagnostics } from '../../diagnostics';
 
 export async function handleCreateReviews(
   request: Request,
   service: ReviewService,
+  diagnostics = new RequestDiagnostics(),
 ): Promise<Response> {
   try {
     let body: unknown;
@@ -19,7 +21,7 @@ export async function handleCreateReviews(
     if (!ip) return Response.json({}, { status: 403 });
     return reviewResponse(await service.submit(input, ip), 201);
   } catch {
-    console.error('reviews_create_failed');
+    diagnostics.error({ event: 'reviews_create_failed' });
     return unavailableResponse();
   }
 }
