@@ -34,6 +34,21 @@ async function route(
     diagnostics.error({ event: 'reviews_binding_missing' });
     throw new Error('Reviews binding unavailable');
   }
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (!ip) return Response.json({}, { status: 403 });
+  const limiter =
+    request.method === 'GET'
+      ? env.REVIEW_READ_LIMITER
+      : env.REVIEW_WRITE_LIMITER;
+  // Fail closed if deployment omitted a required protection.
+  if (!limiter) return Response.json({}, { status: 503 });
+  if (!(await limiter.limit({ key: ip })).success) {
+    diagnostics.info({
+      event: 'reviews_edge_rate_limited',
+      method: request.method,
+    });
+    return Response.json({}, { status: 429, headers: { 'Retry-After': '60' } });
+  }
   const forwarded = new Request(request);
   forwarded.headers.set(REQUEST_ID_HEADER, diagnostics.requestId);
   try {
@@ -73,6 +88,18 @@ export default {
     result.headers.set('Access-Control-Allow-Headers', 'Content-Type');
     result.headers.set('Vary', 'Origin');
     result.headers.set('Cache-Control', 'no-store');
+    result.headers.set('X-Content-Type-Options', 'nosniff');
+    result.headers.set(
+      'Content-Security-Policy',
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    result.headers.set('X-Frame-Options', 'DENY');
+    result.headers.set('Referrer-Policy', 'no-referrer');
+    result.headers.set(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=()',
+    );
+    result.headers.set('Strict-Transport-Security', 'max-age=31536000');
     result.headers.set('X-Request-Id', diagnostics.requestId);
     if (
       new URL(request.url).pathname === '/reviews' &&

@@ -94,7 +94,7 @@ For manual deployment, non-secret settings belong in `wrangler.jsonc` and privat
 
 ## Limits and deployment
 
-The shared object allows 100 valid-shaped submission attempts per UTC day and 3 per IP per fixed hour. Failed verification and upstream errors consume the allowance. Reads refresh at most once per minute, with a 1,440-attempt daily cap. Existing stale cache can be served when the read allowance is exhausted.
+The shared object allows 3 valid-shaped verification attempts per IP per fixed hour and at most 1,000 attempts per UTC day across all IPs. Failed verification consumes these attempt limits, but not the separate 100 verified submission reservations per UTC day. Notion failures consume a verified reservation because the write may have succeeded. The attempt cap is an intentional availability/cost tradeoff: a distributed attack can still exhaust it. Before object dispatch, Cloudflare rate-limit bindings throttle GET to approximately 60 requests per IP per minute and POST to 10, per Cloudflare location. These edge limits are approximate; the object enforces strict persistent quotas. Reads refresh at most once per minute, with a 1,440-attempt daily cap. Existing stale cache can be served when the read allowance is exhausted.
 
 ```sh
 npm run check --prefix backend
@@ -115,7 +115,7 @@ After deployment, run `curl -i https://api.cookii-au.workers.dev/reviews -H 'Ori
 | `reviews_submissions_paused`                                                 | `SUBMISSIONS_ENABLED` is not `true`                                                                                              |
 | `reviews_binding_missing`, `reviews_dispatch_failed`, `reviews_store_failed` | Missing Durable Object binding, failed dispatch, or failed object concurrency boundary                                           |
 | `reviews_storage_failed`                                                     | Identifies `get`/`put` and `cache`/`budget`, without stored values                                                               |
-| `reviews_cache_checked`, `reviews_quota_rejected`                            | Cache state or the quota that prevented an upstream request                                                                      |
+| `reviews_edge_rate_limited`, `reviews_cache_checked`, `reviews_quota_rejected`                            | Cache state or the quota that prevented an upstream request                                                                      |
 | `notion_transport_failed`                                                    | Query/create transport error; includes a fixed error category and duration                                                       |
 | `notion_request_failed`                                                      | Query/create HTTP status, allowlisted Notion error code and duration; 401: token, 403: permissions, 404: source ID or connection |
 | `notion_request_completed`, `notion_response_invalid`                        | Notion HTTP success, followed by JSON/results/page validation failure if processing fails                                        |
@@ -124,7 +124,7 @@ After deployment, run `curl -i https://api.cookii-au.workers.dev/reviews -H 'Ori
 | `reviews_read_failed`, `reviews_create_failed`, `reviews_route_failed`       | Final failure boundary; inspect earlier events with the same request ID                                                          |
 | `reviews_request_completed`                                                  | GET/POST response status and total Worker duration                                                                               |
 
-Application logs contain fixed event names, generated request IDs, setting names, numeric timings/statuses/counts and allowlisted categories. They exclude tokens, IPs and their hashes, review contents, Notion IDs, URLs, raw exceptions, headers and upstream response bodies. Unknown Notion error codes become `unknown`; public error bodies remain generic. Logging adds events to the existing Workers Logs service, with its account retention/ingestion limits; existing request and submission quotas remain in force. No new settings or paid services are required.
+Application logs contain fixed event names, generated request IDs, setting names, numeric timings/statuses/counts and allowlisted categories. They exclude tokens, IPs and their hashes, review contents, Notion IDs, URLs, raw exceptions, headers and upstream response bodies. Unknown Notion error codes become `unknown`; public error bodies remain generic. Logging adds events to the existing Workers Logs service, with its account retention/ingestion limits; existing request and submission quotas remain in force. Rate-limit bindings are declared in wrangler.jsonc and must be deployed with the Worker. Their counters use the connecting IP; application logs do not record it.
 
 ## GitHub deployment
 

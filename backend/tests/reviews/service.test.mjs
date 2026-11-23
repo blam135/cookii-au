@@ -27,6 +27,10 @@ function setup({
       events.push('reserve-read');
       return allowRead;
     },
+    reserveVerifiedSubmission: async () => {
+      events.push('reserve-verified');
+      return true;
+    },
     reserveSubmission: async () => {
       events.push('reserve-submit');
       return allowSubmit;
@@ -101,7 +105,13 @@ test('submit reserves, verifies and saves in order; token never reaches reposito
     kind: 'success',
     reviews: [row],
   });
-  assert.deepEqual(events, ['reserve-submit', 'verify', 'save', 'cache']);
+  assert.deepEqual(events, [
+    'reserve-submit',
+    'verify',
+    'reserve-verified',
+    'save',
+    'cache',
+  ]);
   assert.deepEqual(await state.getCache(), { rows: [row, old], expires: 2000 });
 });
 

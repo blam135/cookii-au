@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { checkExportSecrets } from './check-export-secrets.mjs';
 
 export function secureHtml(html, apiOrigin) {
   if (!/^https:\/\/[a-zA-Z0-9.-]+(?::\d+)?$/.test(apiOrigin))
@@ -57,5 +58,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       ? new URL(process.env.NEXT_PUBLIC_REVIEWS_API_URL).origin
       : undefined) || 'https://example.invalid',
   );
-  console.log('Applied hash-based CSP to exported HTML.');
+  await checkExportSecrets('out');
+  console.log(
+    'Applied hash-based CSP and checked configured private credentials in exported files.',
+  );
 }

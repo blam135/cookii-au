@@ -78,6 +78,36 @@ jobs:
         with:
           path: ./out
 
+  security-browser:
+    name: Test review security with reviews enabled
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - name: Build isolated security fixture (never published)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_REVIEWS_ENABLED: 'true'
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: test-only-site-key
+          NEXT_PUBLIC_REVIEWS_API_URL: https://reviews.example.invalid
+      - run: npx playwright install --with-deps chromium
+      - name: Run browser security and verification checks
+        run: npx playwright test --project=chromium
+        env:
+          NEXT_PUBLIC_REVIEWS_ENABLED: 'true'
+          PLAYWRIGHT_START_SERVER: 'true'
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+
   deploy-frontend:
     name: Deploy frontend to GitHub Pages
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -88,7 +118,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, security-browser]
 
     steps:
       - name: Configure GitHub Pages

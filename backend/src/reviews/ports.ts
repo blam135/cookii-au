@@ -14,5 +14,6 @@ export interface ReviewState {
   getCache(): Promise<ReviewCache | undefined>;
   setCache(cache: ReviewCache): Promise<void>;
   reserveRead(now: number): Promise<boolean>;
+  reserveVerifiedSubmission(now: number): Promise<boolean>;
   reserveSubmission(ip: string, now: number): Promise<boolean>;
 }

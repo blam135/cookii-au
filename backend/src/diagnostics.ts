@@ -5,6 +5,7 @@ type Operation = 'query' | 'create';
 type DiagnosticEvent =
   | { event: 'reviews_configuration_missing'; missing: RequiredSetting[] }
   | { event: 'reviews_submissions_paused' }
+  | { event: 'reviews_edge_rate_limited'; method: string }
   | { event: 'reviews_binding_missing' }
   | {
       event:
@@ -30,6 +31,7 @@ type DiagnosticEvent =
   | {
       event: 'reviews_quota_rejected';
       quota:
+        | 'attempt_daily'
         | 'read_daily'
         | 'read_interval'
         | 'submission_daily'
