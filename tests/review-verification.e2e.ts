@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { injectionPayloads } from './fixtures/injection-payloads.mjs';
 
 test.skip(
   process.env.NEXT_PUBLIC_REVIEWS_ENABLED !== 'true',
@@ -241,3 +242,38 @@ test('stored hostile review fields remain text after submission and reload', asy
   expect(dialogs).toEqual([]);
   expect(submissions()).toBe(1);
 });
+
+for (const { name, text } of injectionPayloads) {
+  test(`loaded review renders ${name} as inert text`, async ({ page }) => {
+    await page.route('**/reviews', (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 'hostile',
+            name: '<img src=x onerror=alert(1)>',
+            rating: 5,
+            text,
+          },
+        ],
+      }),
+    );
+    await page.route('https://challenges.cloudflare.com/**', (route) =>
+      route.abort(),
+    );
+    const dialogs: string[] = [];
+    page.on('dialog', async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+    await page.goto('/#reviews');
+    const review = page.locator('.review-card');
+    await expect(review.locator('blockquote')).toHaveText(`“${text}”`);
+    await expect(
+      review.locator('script, img, iframe, a, [onerror], [onload]'),
+    ).toHaveCount(0);
+    await expect(review.locator('.review-author')).toContainText(
+      '<img src=x onerror=alert(1)>',
+    );
+    expect(dialogs).toEqual([]);
+  });
+}

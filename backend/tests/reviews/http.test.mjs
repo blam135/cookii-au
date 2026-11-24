@@ -94,7 +94,7 @@ test('strict limits, bad challenges and malformed payloads fail closed', async (
   assert.equal(
     (await store.fetch(request('POST', { ...input, text: 'x'.repeat(5000) })))
       .status,
-    400,
+    413,
   );
   assert.equal(
     (await store.fetch(request('POST', { ...input, turnstileToken: '' })))
@@ -622,4 +622,61 @@ test('security headers are present on successful and rejected API responses', as
     );
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   }
+});
+
+for (const [caseIndex, [body, headers, status]] of [
+  ['{', {}, 400],
+  ['{}', { 'Content-Type': 'text/plain' }, 415],
+  ['{}', { 'Content-Encoding': 'gzip' }, 415],
+  [JSON.stringify({ ...input, text: 'x'.repeat(5000) }), {}, 413],
+  [JSON.stringify({ ...input, rating: { $gt: 0 } }), {}, 400],
+  [JSON.stringify({ ...input, approved: true }), {}, 400],
+  [
+    '{"__proto__":{"polluted":true},"name":"Sam","rating":5,"text":"test","turnstileToken":"valid"}',
+    {},
+    400,
+  ],
+].entries()) {
+  test(`invalid request is rejected before shared object dispatch: case ${caseIndex} ${status} ${JSON.stringify(headers)} ${body.slice(0, 30)}`, async () => {
+    const edge = edgeEnvironment({
+      fetch: () => assert.fail('Invalid request reached shared object'),
+    });
+    const req = new Request(request(), { body });
+    for (const [name, value] of Object.entries(headers))
+      req.headers.set(name, value);
+    const response = await worker.fetch(req, edge);
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.equal({}.polluted, undefined);
+  });
+}
+
+test('a slow upload does not prevent another request reaching the shared object', async () => {
+  const abort = new AbortController();
+  let dispatched = 0;
+  const edge = edgeEnvironment({
+    fetch: async (req) => {
+      dispatched++;
+      assert.equal(req.method, 'GET');
+      return Response.json([]);
+    },
+  });
+  const slow = worker.fetch(
+    new Request('https://api.example/reviews', {
+      method: 'POST',
+      headers: request().headers,
+      body: new ReadableStream(),
+      duplex: 'half',
+      signal: abort.signal,
+    }),
+    edge,
+  );
+  try {
+    assert.equal((await worker.fetch(request('GET'), edge)).status, 200);
+    assert.equal(dispatched, 1);
+  } finally {
+    abort.abort();
+  }
+  assert.equal((await slow).status, 400);
+  assert.equal(dispatched, 1);
 });

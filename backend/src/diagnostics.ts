@@ -7,6 +7,7 @@ type DiagnosticEvent =
   | { event: 'reviews_submissions_paused' }
   | { event: 'reviews_edge_rate_limited'; method: string }
   | { event: 'reviews_binding_missing' }
+  | { event: 'reviews_request_rejected'; status: number }
   | {
       event:
         | 'reviews_dispatch_failed'
