@@ -207,3 +207,37 @@ test('mobile verification and its errors stay within the viewport', async ({
     ),
   ).toBe(true);
 });
+
+test('stored hostile review fields remain text after submission and reload', async ({
+  page,
+}) => {
+  const submissions = await setup(page);
+  const name = '<img src=x onerror=alert(1)>';
+  const text =
+    '<script>alert(1)</script><svg onload=alert(1)> SELECT * FROM reviews; --';
+  const dialogs: string[] = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.getByRole('textbox', { name: 'Your name' }).fill(name);
+  await page.getByRole('textbox', { name: 'Your cookie moment' }).fill(text);
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(page.locator('.review-status')).toContainText(
+    'Your review has been published.',
+  );
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    const review = page.locator('.review-card').filter({ hasText: text });
+    await expect(review).toBeVisible();
+    await expect(review.locator('blockquote')).toHaveText(`“${text}”`);
+    await expect(review.locator('.review-author')).toContainText(name);
+    // Assert safe DOM structure even if CSP would independently prevent execution.
+    await expect(
+      review.locator('[onerror], [onload], script, img, iframe'),
+    ).toHaveCount(0);
+  }
+  expect(dialogs).toEqual([]);
+  expect(submissions()).toBe(1);
+});

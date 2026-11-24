@@ -41,6 +41,16 @@ function runtime(outboundService) {
       compatibilityDate: '2026-11-21',
       script,
       bindings: env,
+      ratelimits: {
+        REVIEW_READ_LIMITER: {
+          namespace_id: '71001',
+          simple: { limit: 60, period: 60 },
+        },
+        REVIEW_WRITE_LIMITER: {
+          namespace_id: '71002',
+          simple: { limit: 10, period: 60 },
+        },
+      },
       durableObjects: {
         REVIEWS: { className: 'ReviewsStore', useSQLite: true },
       },

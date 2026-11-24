@@ -3,6 +3,8 @@ import { test } from '../fixtures.mjs';
 import { mock } from 'node:test';
 import worker, { ReviewsStore } from '../../src/index.ts';
 const env = {
+  REVIEW_READ_LIMITER: { limit: async () => ({ success: true }) },
+  REVIEW_WRITE_LIMITER: { limit: async () => ({ success: true }) },
   NOTION_TOKEN: 'secret',
   NOTION_DATA_SOURCE_ID: 'fixed-source',
   ALLOWED_ORIGIN: 'https://cookii.example',
@@ -117,11 +119,12 @@ test('persistent quotas are atomic across concurrent requests and object recreat
     429,
   );
 });
-test('failed verification consumes budget and never calls Notion', async () => {
+test('failed verification consumes attempt budget but preserves verified submission allowance', async () => {
   const count = mockFetch({ success: false });
   const { store, data } = setup();
   await store.fetch(request());
-  assert.equal(data.get('budget').submits, 1);
+  assert.equal(data.get('budget').submits, 0);
+  assert.equal(data.get('budget').attempts, 1);
   assert.equal(count(), 0);
 });
 test('persistent read cache bounds Notion calls and fails closed at daily read allowance', async () => {
@@ -524,4 +527,99 @@ test('Turnstile diagnostics exclude submitted tokens, IPs and upstream details',
     );
   }
   assertPrivate(logs);
+});
+
+for (const challenge of [
+  { success: false, hostname: 'cookii.example', action: 'review' },
+  { success: true, hostname: 'cookii.example', action: 'login' },
+  { success: true, hostname: 'other.example', action: 'review' },
+]) {
+  test(`challenge rejection preserves daily submission quota: ${JSON.stringify(challenge)}`, async () => {
+    const count = mockFetch(challenge);
+    const { store, data } = setup();
+    for (let i = 0; i < 4; i++)
+      assert.equal((await store.fetch(request())).status, i < 3 ? 403 : 429);
+    assert.equal(count(), 0);
+    assert.equal(data.get('budget').submits, 0);
+    assert.equal(data.get('budget').attempts, 3);
+  });
+}
+
+test('distributed invalid challenges do not exhaust the verified daily quota', async () => {
+  mockFetch({ success: false });
+  const { store, data } = setup();
+  for (let i = 1; i <= 101; i++)
+    assert.equal(
+      (await store.fetch(request('POST', input, `192.0.2.${i}`))).status,
+      403,
+    );
+  assert.equal(data.get('budget').submits, 0);
+  const count = mockFetch();
+  assert.equal(
+    (await store.fetch(request('POST', input, '192.0.2.200'))).status,
+    201,
+  );
+  assert.equal(count(), 1);
+  assert.equal(data.get('budget').submits, 1);
+});
+
+test('hard verification-attempt cap bounds external work independently of saved reviews', async () => {
+  const count = mockFetch();
+  const { store, data } = setup();
+  data.set('budget', {
+    day: Math.floor(Date.now() / 86400000),
+    attempts: 1000,
+    submits: 0,
+    reads: 0,
+    ips: {},
+  });
+  assert.equal((await store.fetch(request())).status, 429);
+  assert.equal(count(), 0);
+});
+
+for (const method of ['GET', 'POST']) {
+  test(`edge blocks excessive ${method} requests before object dispatch`, async () => {
+    const binding =
+      method === 'GET' ? 'REVIEW_READ_LIMITER' : 'REVIEW_WRITE_LIMITER';
+    let checks = 0;
+    const edge = edgeEnvironment({
+      fetch: () => assert.fail('Must not dispatch blocked traffic'),
+    });
+    edge[binding] = {
+      limit: async ({ key }) => {
+        checks++;
+        assert.equal(key, '192.0.2.1');
+        return { success: false };
+      },
+    };
+    const response = await worker.fetch(request(method), edge);
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('Retry-After'), '60');
+    assert.equal(checks, 1);
+    edge[binding] = undefined;
+    assert.equal((await worker.fetch(request(method), edge)).status, 503);
+  });
+}
+
+test('security headers are present on successful and rejected API responses', async () => {
+  mockFetch();
+  const { store } = setup();
+  for (const req of [
+    request('GET'),
+    new Request('https://api.example/missing'),
+    request('POST', { ...input, rating: 99 }),
+  ]) {
+    const response = await worker.fetch(req, edgeEnvironment(store));
+    assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+    assert.equal(
+      response.headers.get('Strict-Transport-Security'),
+      'max-age=31536000',
+    );
+    assert.match(
+      response.headers.get('Content-Security-Policy'),
+      /frame-ancestors 'none'/,
+    );
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  }
 });

@@ -14,6 +14,7 @@ import { TurnstileVerifier } from './turnstile';
 interface ReviewBudget {
   day: number;
   submits: number;
+  attempts?: number;
   reads: number;
   nextRead?: number;
   ips: Record<string, { hour: number; count: number }>;
@@ -105,6 +106,21 @@ class CloudflareReviewState implements ReviewState {
     return true;
   }
 
+  async reserveVerifiedSubmission(now: number): Promise<boolean> {
+    const budget = await this.budget(now);
+    if (budget.submits >= 100) {
+      this.diagnostics.info({
+        event: 'reviews_quota_rejected',
+        quota: 'submission_daily',
+      });
+      return false;
+    }
+    // Reserve before Notion so failed writes cannot cause unlimited provider calls.
+    budget.submits++;
+    await this.write('budget', budget);
+    return true;
+  }
+
   async reserveSubmission(ip: string, now: number): Promise<boolean> {
     const budget = await this.budget(now);
     const key = await crypto.subtle.importKey(
@@ -125,14 +141,17 @@ class CloudflareReviewState implements ReviewState {
     const hour = Math.floor(now / 3600000);
     const bucket =
       budget.ips[hash]?.hour === hour ? budget.ips[hash] : { hour, count: 0 };
-    if (budget.submits >= 100 || bucket.count >= 3) {
+    if ((budget.attempts ?? 0) >= 1000 || bucket.count >= 3) {
       this.diagnostics.info({
         event: 'reviews_quota_rejected',
-        quota: budget.submits >= 100 ? 'submission_daily' : 'submission_hourly',
+        quota:
+          (budget.attempts ?? 0) >= 1000
+            ? 'attempt_daily'
+            : 'submission_hourly',
       });
       return false;
     }
-    budget.submits++;
+    budget.attempts = (budget.attempts ?? 0) + 1;
     bucket.count++;
     budget.ips[hash] = bucket;
     // Persist reservations before any external request, including failures.

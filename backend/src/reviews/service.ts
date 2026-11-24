@@ -38,6 +38,8 @@ export class ReviewService {
       return { kind: 'rate-limited' };
     if (!(await this.verifier.verify(submission.verificationToken, ip)))
       return { kind: 'verification-failed' };
+    if (!(await this.state.reserveVerifiedSubmission(now)))
+      return { kind: 'rate-limited' };
     const { verificationToken: _token, ...input } = submission;
     const rows = await this.repository.save(input);
     const cache = await this.state.getCache();

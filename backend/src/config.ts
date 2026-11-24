@@ -1,4 +1,6 @@
 export interface Environment {
+  REVIEW_READ_LIMITER: RateLimit;
+  REVIEW_WRITE_LIMITER: RateLimit;
   REVIEWS: DurableObjectNamespace;
   ALLOWED_ORIGIN: string;
   TURNSTILE_HOSTNAME: string;
