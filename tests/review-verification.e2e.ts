@@ -128,6 +128,17 @@ test('publishes a review through the form and loads it after refresh', async ({
     page.locator('.review-author').filter({ hasText: demoName }),
   ).toBeVisible();
   expect(submissions()).toBe(1);
+  await expect(page.locator('.review-verification-status')).toContainText(
+    'Please complete the verification below.',
+  );
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeDisabled();
+  // A new widget must work with the script already loaded after submission.
+  await verify(page);
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeEnabled();
   await page.reload();
   await expect(
     page.locator('.review-author').filter({ hasText: demoName }),
