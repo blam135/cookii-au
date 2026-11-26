@@ -5,12 +5,12 @@ import worker, { ReviewsStore } from '../../src/index.ts';
 const env = {
   REVIEW_READ_LIMITER: { limit: async () => ({ success: true }) },
   REVIEW_WRITE_LIMITER: { limit: async () => ({ success: true }) },
-  NOTION_TOKEN: 'secret',
+  NOTION_TOKEN: 'test-private-notion-token',
   NOTION_DATA_SOURCE_ID: 'fixed-source',
   ALLOWED_ORIGIN: 'https://cookii.example',
   TURNSTILE_HOSTNAME: 'cookii.example',
-  TURNSTILE_SECRET: 'secret',
-  IP_HASH_SECRET: 'secret',
+  TURNSTILE_SECRET: 'test-private-turnstile-key',
+  IP_HASH_SECRET: 'test-private-ip-hash-key',
   SUBMISSIONS_ENABLED: 'true',
 };
 const input = {
@@ -258,6 +258,8 @@ function assertPrivate(logs) {
   const output = JSON.stringify(logs);
   for (const value of [
     env.NOTION_TOKEN,
+    env.TURNSTILE_SECRET,
+    env.IP_HASH_SECRET,
     env.NOTION_DATA_SOURCE_ID,
     '192.0.2.1',
     input.name,
@@ -528,6 +530,64 @@ test('Turnstile diagnostics exclude submitted tokens, IPs and upstream details',
   }
   assertPrivate(logs);
 });
+
+for (const { name, codes, expected } of [
+  {
+    name: 'expired or reused token',
+    codes: ['timeout-or-duplicate', 'timeout-or-duplicate'],
+    expected: ['timeout-or-duplicate'],
+  },
+  {
+    name: 'invalid secret',
+    codes: ['invalid-input-secret'],
+    expected: ['invalid-input-secret'],
+  },
+  {
+    name: 'upstream details mixed with a known error',
+    codes: [
+      'internal-error',
+      'private-diagnostic-marker',
+      { token: 'private-diagnostic-marker' },
+    ],
+    expected: ['internal-error', 'unknown'],
+  },
+  { name: 'missing codes', codes: undefined, expected: ['unknown'] },
+  { name: 'empty codes', codes: [], expected: ['unknown'] },
+  {
+    name: 'malformed codes',
+    codes: 'private-diagnostic-marker',
+    expected: ['unknown'],
+  },
+]) {
+  test(`Turnstile challenge diagnostics safely identify ${name}`, async () => {
+    const logs = captureDiagnostics();
+    const creates = mockFetch({
+      success: false,
+      'error-codes': codes,
+      message: 'private-diagnostic-marker',
+    });
+    const { store, data } = setup();
+    const response = await store.fetch(
+      request('POST', {
+        ...input,
+        turnstileToken: 'private-diagnostic-marker',
+      }),
+    );
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      message: 'Please complete the verification again.',
+    });
+    const rejection = logs.find(
+      (entry) => entry.event === 'turnstile_rejected',
+    );
+    assert.equal(rejection.reason, 'challenge');
+    assert.deepEqual(rejection.codes, expected);
+    assert.equal(creates(), 0);
+    assert.equal(data.get('budget').attempts, 1);
+    assert.equal(data.get('budget').submits, 0);
+    assertPrivate(logs);
+  });
+}
 
 for (const challenge of [
   { success: false, hostname: 'cookii.example', action: 'review' },
