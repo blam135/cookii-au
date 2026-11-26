@@ -168,7 +168,7 @@ test('create handler rejects malformed JSON and missing client IP before provide
     assert.fail('Invalid submissions must not contact providers');
   });
   const { store, data } = setup();
-  const malformed = new Request(request(), { body: '{' });
+  const malformed = new Request(request(), { method: 'POST', body: '{' });
   const response = await store.fetch(malformed);
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { message: 'Invalid review.' });
@@ -468,7 +468,7 @@ test('concurrent requests keep separate IDs across serialized object operations'
   mockFetch();
   const { store } = setup();
   const responses = await Promise.all(
-    Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, async () =>
       worker.fetch(request(), edgeEnvironment(store)),
     ),
   );
@@ -624,7 +624,8 @@ test('security headers are present on successful and rejected API responses', as
   }
 });
 
-for (const [caseIndex, [body, headers, status]] of [
+/** @type {Array<[string, Record<string, string>, number]>} */
+const invalidRequestCases = [
   ['{', {}, 400],
   ['{}', { 'Content-Type': 'text/plain' }, 415],
   ['{}', { 'Content-Encoding': 'gzip' }, 415],
@@ -636,12 +637,16 @@ for (const [caseIndex, [body, headers, status]] of [
     {},
     400,
   ],
-].entries()) {
+];
+for (const [
+  caseIndex,
+  [body, headers, status],
+] of invalidRequestCases.entries()) {
   test(`invalid request is rejected before shared object dispatch: case ${caseIndex} ${status} ${JSON.stringify(headers)} ${body.slice(0, 30)}`, async () => {
     const edge = edgeEnvironment({
       fetch: () => assert.fail('Invalid request reached shared object'),
     });
-    const req = new Request(request(), { body });
+    const req = new Request(request(), { method: 'POST', body });
     for (const [name, value] of Object.entries(headers))
       req.headers.set(name, value);
     const response = await worker.fetch(req, edge);
