@@ -70,8 +70,37 @@ type DiagnosticEvent =
     }
   | {
       event: 'turnstile_rejected';
-      reason: 'challenge' | 'hostname' | 'action';
+      reason: 'challenge';
+      codes: TurnstileErrorCode[];
+    }
+  | {
+      event: 'turnstile_rejected';
+      reason: 'hostname' | 'action';
     };
+
+const turnstileErrorCodeValues = [
+  'missing-input-secret',
+  'invalid-input-secret',
+  'missing-input-response',
+  'invalid-input-response',
+  'bad-request',
+  'timeout-or-duplicate',
+  'internal-error',
+] as const;
+type TurnstileErrorCode = (typeof turnstileErrorCodeValues)[number] | 'unknown';
+
+export function turnstileErrorCodes(value: unknown): TurnstileErrorCode[] {
+  if (!Array.isArray(value) || value.length === 0) return ['unknown'];
+  // Fixed values only: never log arbitrary upstream strings or response objects.
+  return [
+    ...new Set(
+      value.map(
+        (code) =>
+          turnstileErrorCodeValues.find((known) => known === code) ?? 'unknown',
+      ),
+    ),
+  ];
+}
 
 const notionErrorCodes = [
   'invalid_json',

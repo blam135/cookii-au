@@ -1,11 +1,16 @@
 import type { Environment } from '../../config';
 import type { ChallengeVerifier } from '../ports';
-import { failureReason, RequestDiagnostics } from '../../diagnostics';
+import {
+  failureReason,
+  RequestDiagnostics,
+  turnstileErrorCodes,
+} from '../../diagnostics';
 
 interface ChallengeResult {
   success: boolean;
   hostname?: string;
   action?: string;
+  'error-codes'?: unknown;
 }
 
 export class TurnstileVerifier implements ChallengeVerifier {
@@ -68,19 +73,24 @@ export class TurnstileVerifier implements ChallengeVerifier {
       this.diagnostics.error({ event: 'turnstile_failed', reason: 'json' });
       throw new Error('Verification unavailable');
     }
+    if (result.success !== true) {
+      this.diagnostics.info({
+        event: 'turnstile_rejected',
+        reason: 'challenge',
+        codes: turnstileErrorCodes(result['error-codes']),
+      });
+      return false;
+    }
     if (
-      result.success !== true ||
       result.hostname !== this.env.TURNSTILE_HOSTNAME ||
       result.action !== 'review'
     ) {
       this.diagnostics.info({
         event: 'turnstile_rejected',
         reason:
-          result.success !== true
-            ? 'challenge'
-            : result.hostname !== this.env.TURNSTILE_HOSTNAME
-              ? 'hostname'
-              : 'action',
+          result.hostname !== this.env.TURNSTILE_HOSTNAME
+            ? 'hostname'
+            : 'action',
       });
       return false;
     }

@@ -150,22 +150,40 @@ Run `pnpm --filter cookii-reviews-worker typecheck` for strict Worker/deployment
 
 After deployment, run `curl -i https://api.cookii-au.workers.dev/reviews -H 'Origin: https://cookii.au'`. Copy the returned `X-Request-Id`, then find the matching `requestId` in **Cloudflare → Workers & Pages → api → Observability → Logs**. Worker and Durable Object events share that ID, including failures. The Worker generates a fresh ID for every request and replaces client-supplied IDs.
 
-| Event                                                                        | Meaning                                                                                                                          |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `reviews_configuration_missing`                                              | Lists missing setting names only; check GitHub configuration and redeploy                                                        |
-| `reviews_submissions_paused`                                                 | `SUBMISSIONS_ENABLED` is not `true`                                                                                              |
-| `reviews_binding_missing`, `reviews_dispatch_failed`, `reviews_store_failed` | Missing Durable Object binding, failed dispatch, or failed object concurrency boundary                                           |
-| `reviews_storage_failed`                                                     | Identifies `get`/`put` and `cache`/`budget`, without stored values                                                               |
-| `reviews_edge_rate_limited`, `reviews_cache_checked`, `reviews_quota_rejected`                            | Cache state or the quota that prevented an upstream request                                                                      |
-| `notion_transport_failed`                                                    | Query/create transport error; includes a fixed error category and duration                                                       |
-| `notion_request_failed`                                                      | Query/create HTTP status, allowlisted Notion error code and duration; 401: token, 403: permissions, 404: source ID or connection |
-| `notion_request_completed`, `notion_response_invalid`                        | Notion HTTP success, followed by JSON/results/page validation failure if processing fails                                        |
-| `notion_reviews_loaded`                                                      | Counts accepted and skipped rows; skipped rows may not match the expected review schema                                          |
-| `turnstile_failed`, `turnstile_rejected`                                     | Verification service failure or challenge/hostname/action mismatch                                                               |
-| `reviews_read_failed`, `reviews_create_failed`, `reviews_route_failed`       | Final failure boundary; inspect earlier events with the same request ID                                                          |
-| `reviews_request_completed`                                                  | GET/POST response status and total Worker duration                                                                               |
+| Event                                                                          | Meaning                                                                                                                          |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `reviews_configuration_missing`                                                | Lists missing setting names only; check GitHub configuration and redeploy                                                        |
+| `reviews_submissions_paused`                                                   | `SUBMISSIONS_ENABLED` is not `true`                                                                                              |
+| `reviews_binding_missing`, `reviews_dispatch_failed`, `reviews_store_failed`   | Missing Durable Object binding, failed dispatch, or failed object concurrency boundary                                           |
+| `reviews_storage_failed`                                                       | Identifies `get`/`put` and `cache`/`budget`, without stored values                                                               |
+| `reviews_edge_rate_limited`, `reviews_cache_checked`, `reviews_quota_rejected` | Cache state or the quota that prevented an upstream request                                                                      |
+| `notion_transport_failed`                                                      | Query/create transport error; includes a fixed error category and duration                                                       |
+| `notion_request_failed`                                                        | Query/create HTTP status, allowlisted Notion error code and duration; 401: token, 403: permissions, 404: source ID or connection |
+| `notion_request_completed`, `notion_response_invalid`                          | Notion HTTP success, followed by JSON/results/page validation failure if processing fails                                        |
+| `notion_reviews_loaded`                                                        | Counts accepted and skipped rows; skipped rows may not match the expected review schema                                          |
+| `turnstile_failed`, `turnstile_rejected`                                       | Verification service failure or challenge/hostname/action mismatch; challenge rejections include allowlisted `codes`             |
+| `reviews_read_failed`, `reviews_create_failed`, `reviews_route_failed`         | Final failure boundary; inspect earlier events with the same request ID                                                          |
+| `reviews_request_completed`                                                    | GET/POST response status and total Worker duration                                                                               |
 
-Application logs contain fixed event names, generated request IDs, setting names, numeric timings/statuses/counts and allowlisted categories. They exclude tokens, IPs and their hashes, review contents, Notion IDs, URLs, raw exceptions, headers and upstream response bodies. Unknown Notion error codes become `unknown`; public error bodies remain generic. Logging adds events to the existing Workers Logs service, with its account retention/ingestion limits; existing request and submission quotas remain in force. Rate-limit bindings are declared in wrangler.jsonc and must be deployed with the Worker. Their counters use the connecting IP; application logs do not record it.
+Application logs contain fixed event names, generated request IDs, setting names, numeric timings/statuses/counts and allowlisted categories. They exclude tokens, IPs and their hashes, review contents, Notion IDs, URLs, raw exceptions, headers and upstream response bodies. Unknown Notion and Turnstile error codes become `unknown`; public error bodies remain generic. Logging adds events to the existing Workers Logs service, with its account retention/ingestion limits; existing request and submission quotas remain in force. Rate-limit bindings are declared in wrangler.jsonc and must be deployed with the Worker. Their counters use the connecting IP; application logs do not record it.
+
+For a review rejected after the widget shows success, include **Info** events in the
+Cloudflare log view. Find `turnstile_rejected` and correlate it with
+`reviews_request_completed` using `requestId`. A `reason` of `challenge` means
+Siteverify rejected the token before the hostname/action checks or the Notion save.
+The `codes` field distinguishes these cases:
+
+| Code                                               | What to check                                                                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `invalid-input-secret`, `missing-input-secret`     | Check the GitHub `TURNSTILE_SECRET` secret against the Cloudflare widget used for `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, then redeploy the backend. Never paste the secret into logs or issues. |
+| `timeout-or-duplicate`                             | The token expired or was already redeemed. Use a fresh verification for a new submission.                                                                                                  |
+| `invalid-input-response`, `missing-input-response` | Check the submitted token and that frontend and backend use the same Turnstile widget's key pair.                                                                                          |
+| `bad-request`, `internal-error`, `unknown`         | Check request construction or provider availability; unknown, absent and malformed codes are deliberately redacted.                                                                        |
+
+The widget runs on page load and resets after each attempted submission because tokens
+are intended for one use. Failed verification still consumes the submission-attempt
+allowance (three attempts per IP per clock hour), so repeated retries can then return 429. The new diagnostic fields do not change verification or quota enforcement.
+See [Cloudflare's Siteverify error reference](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/#error-codes-reference).
 
 ## GitHub deployment
 
@@ -173,10 +191,10 @@ The `Deploy backend to Cloudflare Workers` workflow runs backend tests, typechec
 
 Configure these in **Repository Settings → Secrets and variables → Actions**:
 
-| Type               | Names                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- |
-| Secrets            | `CLOUDFLARE_API_TOKEN`, `NOTION_TOKEN`, `TURNSTILE_SECRET`, `IP_HASH_SECRET`                                    |
-| Variables          | `CLOUDFLARE_ACCOUNT_ID`, `ALLOWED_ORIGIN`, `TURNSTILE_HOSTNAME`, `NOTION_DATA_SOURCE_ID`, `SUBMISSIONS_ENABLED` |
+| Type               | Names                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Secrets            | `CLOUDFLARE_API_TOKEN`, `NOTION_TOKEN`, `TURNSTILE_SECRET`, `IP_HASH_SECRET`                                         |
+| Variables          | `CLOUDFLARE_ACCOUNT_ID`, `ALLOWED_ORIGIN`, `TURNSTILE_HOSTNAME`, `NOTION_DATA_SOURCE_ID`, `SUBMISSIONS_ENABLED`      |
 | Frontend variables | `NEXT_PUBLIC_REVIEWS_ENABLED` (defaults to `false`), `NEXT_PUBLIC_REVIEWS_API_URL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` |
 
 Use a Cloudflare API token scoped to the intended account with permission to deploy Workers (the Edit Cloudflare Workers template is a starting point). The account ID is the 32-character value in the Cloudflare dashboard. Use a Workers Free account; deployment code cannot enforce the billing plan.
