@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
     groups:
-      npm-dependencies:
+      workspace-dependencies:
         patterns:
           - '*'
 
@@ -15,13 +15,5 @@ updates:
       interval: weekly
     groups:
       github-actions:
-        patterns:
-          - '*'
-  - package-ecosystem: npm
-    directory: /backend
-    schedule:
-      interval: weekly
-    groups:
-      backend-dependencies:
         patterns:
           - '*'

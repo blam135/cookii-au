@@ -95,7 +95,7 @@ unchanged by the routing refactor.
 From the repository root:
 
 ```sh
-npm ci --prefix backend
+pnpm install --frozen-lockfile
 cp backend/.env.example backend/.dev.vars
 ```
 
@@ -104,7 +104,7 @@ The template is named `.env.example` for consistency; Wrangler reads the copied 
 Start the Worker locally with HTTPS so the frontend's HTTPS-only API configuration accepts it:
 
 ```sh
-npm run dev --prefix backend -- --local --local-protocol https --port 8787
+pnpm --filter cookii-reviews-worker dev --local --local-protocol https --port 8787
 ```
 
 Open `https://localhost:8787/reviews` in the browser and trust Wrangler's local development certificate. In the frontend's `.env.local`, set:
@@ -115,7 +115,7 @@ NEXT_PUBLIC_REVIEWS_API_URL=https://localhost:8787
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-development-public-site-key
 ```
 
-Run `npm run dev` from the repository root and open `http://localhost:3000`. Local Durable Object state is stored under `.wrangler/`; deleting that directory resets local quotas and cache.
+Run `pnpm run dev` from the repository root and open `http://localhost:3000`. Local Durable Object state is stored under `.wrangler/`; deleting that directory resets local quotas and cache.
 
 ## Configuration
 
@@ -129,20 +129,20 @@ Run `npm run dev` from the repository root and open `http://localhost:3000`. Loc
 | `TURNSTILE_SECRET`      | Private Turnstile verification key                      |
 | `IP_HASH_SECRET`        | Random secret of at least 32 bytes for daily IP hashing |
 
-For manual deployment, non-secret settings belong in `wrangler.jsonc` and private credentials are set with `npx wrangler secret put <NAME>` from `backend/`. Use the ignored `.dev.vars` file locally. The GitHub pipeline supplies production values from repository settings as described below.
+For manual deployment, non-secret settings belong in `wrangler.jsonc` and private credentials are set with `pnpm exec wrangler secret put <NAME>` from `backend/`. Use the ignored `.dev.vars` file locally. The GitHub pipeline supplies production values from repository settings as described below.
 
 ## Limits and deployment
 
 The shared object allows 3 valid-shaped verification attempts per IP per fixed hour and at most 1,000 attempts per UTC day across all IPs. Failed verification consumes these attempt limits, but not the separate 100 verified submission reservations per UTC day. Notion failures consume a verified reservation because the write may have succeeded. The attempt cap is an intentional availability/cost tradeoff: a distributed attack can still exhaust it. Before object dispatch, Cloudflare rate-limit bindings throttle GET to approximately 60 requests per IP per minute and POST to 10, per Cloudflare location. These edge limits are approximate; the object enforces strict persistent quotas. Reads refresh at most once per minute, with a 1,440-attempt daily cap. Existing stale cache can be served when the read allowance is exhausted.
 
 ```sh
-npm run check --prefix backend
-npm run deploy --prefix backend
+pnpm --filter cookii-reviews-worker check
+pnpm --filter cookii-reviews-worker deploy
 ```
 
 Deployment requires Cloudflare authentication. Keep the Durable Object name/binding stable to preserve production state. Keep the account on Workers Free to use its hard free quotas; exhausted account-wide Worker or Durable Object allowances can interrupt service. The configuration cannot enforce the account's billing plan. Set `SUBMISSIONS_ENABLED=false` and redeploy to pause submissions.
 
-Run `npm run typecheck --prefix backend` for strict Worker/deployment TypeScript checks and `npm test --prefix backend` for the backend Playwright regression project. Live integration checks require the configured services; mocked tests do not verify deployed permissions or availability.
+Run `pnpm --filter cookii-reviews-worker typecheck` for strict Worker/deployment TypeScript checks and `pnpm --filter cookii-reviews-worker test` for the backend Playwright regression project. Live integration checks require the configured services; mocked tests do not verify deployed permissions or availability.
 
 ## Troubleshooting requests
 

@@ -5,11 +5,14 @@ Marketing site for Cookii by Talya, built with Next.js and deployed as a static 
 ## Local development
 
 ```bash
-npm install
-npm run dev
+npm install --global pnpm@10.34.5
+pnpm install
+pnpm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+The root frontend and `backend/` form a pnpm workspace with one `pnpm-lock.yaml`. Run `pnpm install` at the root to install both projects. Use `pnpm dev:backend` in another terminal for the Worker, or `pnpm --filter cookii-reviews-worker <script>` for backend commands. Run `pnpm test:all` for both regression suites. CI installs the pinned pnpm version with a frozen lockfile.
 
 ## Deploy to GitHub Pages
 
@@ -24,10 +27,10 @@ Configure the [backend deployment credentials and variables](backend/README.md#g
 ## Production build
 
 ```bash
-npm run build
+pnpm run build
 ```
 
-Use `nvm use` to select the patched Node.js version in `.nvmrc`. Supported Node.js versions are 22.23.4+, 24.22.1+, and 26.12.1+ within those major releases; npm enforces these minimums. The project self-hosts its fonts, so production builds do not depend on Google Fonts being reachable.
+Use `nvm use` to select the patched Node.js version in `.nvmrc`. Supported Node.js versions are 22.23.4+, 24.22.1+, and 26.12.1+ within those major releases; pnpm enforces these minimums. The project self-hosts its fonts, so production builds do not depend on Google Fonts being reachable.
 
 ## Customer reviews
 
@@ -43,19 +46,19 @@ This flag controls visibility for every visitor. Backend access and writes remai
 
 Set `NEXT_PUBLIC_REVIEWS_API_URL` to the backend base URL, `https://api.cookii-au.workers.dev`; the application appends `/reviews`. A trailing slash is accepted.
 
-Without configuration, submissions remain disabled. Failed submissions preserve the form. Run `npm test` for client and backend regression tests, and `npm run build` for the static export with hash-based CSP.
+Without configuration, submissions remain disabled. Failed submissions preserve the form. Run `pnpm test:all` for client and backend regression tests, and `pnpm run build` for the static export with hash-based CSP.
 
 ## Testing
 
-`npm test` runs the Playwright Test regression project (no browser download required). `npm run test:ui` opens its interactive runner. Run backend checks separately with `npm run typecheck --prefix backend` and `npm test --prefix backend`.
+`pnpm test` runs the Playwright Test regression project (no browser download required). `pnpm run test:ui` opens its interactive runner. Run backend checks separately with `pnpm --filter cookii-reviews-worker typecheck` and `pnpm --filter cookii-reviews-worker test`.
 
 `playwright.config.ts` also defines a Chromium project for `tests/**/*.e2e.ts` browser tests. The review tests intercept the API and Turnstile so they never create live reviews; they cover read/submit behavior, refresh, verification errors/expiry and mobile layout.
 
 Build with the API URL and site key configured, then run the browser tests with the same `NEXT_PUBLIC_REVIEWS_ENABLED` value used for the build:
 
 ```sh
-npx playwright install chromium
-NEXT_PUBLIC_REVIEWS_ENABLED=true PLAYWRIGHT_START_SERVER=true PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npx playwright test --project=chromium
+pnpm exec playwright install chromium
+NEXT_PUBLIC_REVIEWS_ENABLED=true PLAYWRIGHT_START_SERVER=true PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 pnpm exec playwright test --project=chromium
 ```
 
 Enabled builds run the review/verification scenarios; disabled builds check that the section is absent and no review or Turnstile requests occur. To test the disabled state, rebuild with `NEXT_PUBLIC_REVIEWS_ENABLED=false` and pass `false` to the test command too. CI uses the same flag for its build and browser tests.
