@@ -1,6 +1,6 @@
 import type { ReviewResult } from './model';
 
-export class RequestBodyError extends Error {
+class RequestBodyError extends Error {
   constructor(readonly status: 400 | 408 | 413 | 415) {
     super('Invalid review request.');
   }
