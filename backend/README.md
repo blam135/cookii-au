@@ -6,17 +6,18 @@ A Cloudflare Workers service for the Cookii website. It provides public API endp
 
 ```text
 src/
-  index.ts                 Worker entry point and composition
+  index.ts                 Hono Worker routes, response middleware and forwarding
   config.ts                Cloudflare bindings and configuration checks
   diagnostics.ts           Structured events and request correlation
   reviews/
-    model.ts               Review types, outcomes and validation functions
+    model.ts               Review outcomes and strict validation wrapper
+    schema.ts              Pure Zod schemas and inferred types shared with the browser
     ports.ts               Repository, verification and state interfaces
     service.ts             List/submit use cases; no HTTP or provider APIs
     http.ts                Bounded JSON parsing and response helpers
     submission.ts          Submission validation and token mapping
     handlers/
-      index.ts             GET/POST dispatch
+      index.ts             Hono GET/POST routes with request-local service bindings
       get-reviews.ts       Read request handler
       create-reviews.ts    Write request handler
     adapters/
@@ -50,6 +51,44 @@ flowchart LR
 ```
 
 GET returns cached reviews or reads Notion. POST reserves quota and verifies Turnstile before creating a review. The Durable Object serializes quota reservations, external calls and cache updates.
+
+## Routing and validation libraries
+
+The Worker exports a Hono app from `src/index.ts`; Cloudflare invokes its `fetch()` entry
+point. Route selection is explicit:
+
+```text
+Browser GET/POST /reviews
+  -> Hono response/diagnostic middleware
+  -> app.get('/reviews', ...) or app.post('/reviews', ...)
+  -> forwardReviewRequest: configuration, origin, rate limits, bounded body validation
+  -> env.REVIEWS.get(idFromName('reviews-v1')).fetch(completedRequest)
+  -> ReviewsStore.fetch: serialized operation and dependency construction
+  -> handler Hono app: GET -> handleGetReviews; POST -> handleCreateReviews
+  -> ReviewService -> state / Turnstile / Notion
+```
+
+Hono's secureHeaders middleware supplies the existing explicit API policy. The small CORS
+policy remains explicit so headers on successes, errors, and preflights stay compatible.
+HEAD is rejected with 405 rather than Hono's default GET fallback. Unknown or encoded paths
+and trailing slashes retain exact route matching. Request IDs and service dependencies live
+in request-local contexts, never mutable global application fields. Unexpected errors use
+our existing safe diagnostics rather than Hono's default console logger.
+
+`src/reviews/schema.ts` contains only portable Zod schemas. The frontend imports those
+schemas directly; it does not import Worker bindings or adapters. Both package manifests pin
+Zod to the same version so each deployment can install independently. The frontend workflow
+also runs when the shared schema changes. Backend inputs use strict objects, while browser
+callers retain the previous allowance for metadata that saveReview explicitly strips out.
+Schemas do not trim or coerce: raw length, blank text, control characters, rating and token
+rules stay the same. Normalization still happens when saving, and Zod errors are not sent
+to clients or logged with input values.
+
+The custom 4 KB/five-second body reader deliberately stays in place before schema parsing
+and Durable Object dispatch. Hono's general JSON/body-limit/timeout middleware is not a
+replacement for the tested byte counting, stream cancellation, and absolute upload deadline.
+Turnstile verification, persistent quotas, cache, serialization and outbound adapters are
+unchanged by the routing refactor.
 
 ## Local development
 

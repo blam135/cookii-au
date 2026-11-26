@@ -1,14 +1,6 @@
-import { isReviewInput, type ReviewSubmission } from './model';
+import { reviewSubmissionSchema, type ReviewSubmission } from './schema';
 
 export function parseSubmission(value: unknown): ReviewSubmission | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const { turnstileToken, ...input } = value as Record<string, unknown>;
-  if (
-    !isReviewInput(input) ||
-    typeof turnstileToken !== 'string' ||
-    !turnstileToken ||
-    turnstileToken.length > 2048
-  )
-    return null;
-  return { ...input, verificationToken: turnstileToken };
+  const result = reviewSubmissionSchema.safeParse(value);
+  return result.success ? result.data : null;
 }

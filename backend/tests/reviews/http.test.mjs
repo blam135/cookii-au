@@ -680,3 +680,82 @@ test('a slow upload does not prevent another request reaching the shared object'
   assert.equal((await slow).status, 400);
   assert.equal(dispatched, 1);
 });
+
+for (const [method, path, expected] of [
+  ['GET', '/reviews/', 404],
+  ['GET', '/%72eviews', 404],
+  ['GET', '/missing', 404],
+  ['OPTIONS', '/missing', 404],
+  ['OPTIONS', '/reviews', 204],
+  ['HEAD', '/reviews', 405],
+  ['PUT', '/reviews', 405],
+  ['PATCH', '/reviews', 405],
+  ['DELETE', '/reviews', 405],
+]) {
+  test(`Hono preserves exact routing: ${method} ${path} returns ${expected}`, async () => {
+    const edge = edgeEnvironment({
+      fetch: () => assert.fail('Rejected route reached object'),
+    });
+    const response = await worker.fetch(
+      new Request(`https://api.example${path}`, { method }),
+      edge,
+    );
+    assert.equal(response.status, expected);
+    assert.equal(
+      response.headers.get('Access-Control-Allow-Origin'),
+      env.ALLOWED_ORIGIN,
+    );
+    assert.equal(
+      response.headers.get('Access-Control-Allow-Methods'),
+      'GET,POST,OPTIONS',
+    );
+    assert.equal(
+      response.headers.get('Access-Control-Allow-Headers'),
+      'Content-Type',
+    );
+    assert.equal(response.headers.get('Vary'), 'Origin');
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+    assert.equal(
+      response.headers.get('Strict-Transport-Security'),
+      'max-age=31536000',
+    );
+    assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+    assert.equal(
+      response.headers.get('Permissions-Policy'),
+      'camera=(), microphone=(), geolocation=()',
+    );
+    assert.equal(
+      response.headers.get('Content-Security-Policy'),
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    assert.match(response.headers.get('X-Request-Id'), /^[0-9a-f-]{36}$/);
+  });
+}
+
+test('Hono error boundary retains generic responses, headers and private diagnostics', async () => {
+  const logs = captureDiagnostics();
+  const edge = edgeEnvironment({
+    fetch: () => {
+      throw new Error('private-diagnostic-marker');
+    },
+  });
+  const response = await worker.fetch(request('GET'), edge);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    message: 'Reviews temporarily unavailable.',
+  });
+  assert.equal(
+    response.headers.get('Access-Control-Allow-Origin'),
+    env.ALLOWED_ORIGIN,
+  );
+  assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+  assert.match(
+    response.headers.get('Content-Security-Policy'),
+    /frame-ancestors 'none'/,
+  );
+  assert.ok(logs.some((entry) => entry.event === 'reviews_route_failed'));
+  assertPrivate(logs);
+});

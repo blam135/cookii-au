@@ -9,6 +9,7 @@ on:
     paths:
       - 'app/**'
       - 'lib/**'
+      - 'backend/src/reviews/schema.ts'
       - 'scripts/**'
       - 'tests/**'
       - 'package*.json'
