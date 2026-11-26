@@ -1,5 +1,10 @@
-export type Review = { id: string; name: string; rating: number; text: string };
-export type ReviewInput = Omit<Review, 'id'>;
+import {
+  clientReviewInputSchema,
+  reviewSchema,
+  type Review,
+  type ReviewInput,
+} from '../backend/src/reviews/schema';
+export type { Review, ReviewInput } from '../backend/src/reviews/schema';
 
 const baseUrl = process.env.NEXT_PUBLIC_REVIEWS_API_URL?.replace(/\/+$/, '');
 const url = baseUrl ? `${baseUrl}/reviews` : undefined;
@@ -26,29 +31,11 @@ export class ReviewError extends Error {
 }
 
 export function isReviewInput(value: unknown): value is ReviewInput {
-  if (!value || typeof value !== 'object') return false;
-  const review = value as Partial<ReviewInput>;
-  // eslint-disable-next-line no-control-regex
-  return (
-    typeof review.name === 'string' &&
-    review.name.trim().length > 0 &&
-    review.name.length <= 40 &&
-    !/[\u0000-\u001f\u007f]/u.test(review.name) &&
-    // Reject non-printing control characters; tabs/newlines are allowed in review text.
-    // eslint-disable-next-line no-control-regex
-    typeof review.text === 'string' &&
-    review.text.trim().length > 0 &&
-    review.text.length <= 400 &&
-    !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(review.text) &&
-    typeof review.rating === 'number' &&
-    Number.isInteger(review.rating) &&
-    review.rating >= 1 &&
-    review.rating <= 5
-  );
+  return clientReviewInputSchema.safeParse(value).success;
 }
 
 function isReview(value: unknown): value is Review {
-  return isReviewInput(value) && 'id' in value && typeof value.id === 'string';
+  return reviewSchema.safeParse(value).success;
 }
 
 async function request(
