@@ -143,3 +143,38 @@ Use a Cloudflare API token scoped to the intended account with permission to dep
 `deploy:ci` validates configuration, passes non-secret variables as Wrangler overrides, and uploads the three application secrets with the Worker version using a restricted temporary JSON file that is removed afterward. Missing credentials fail deployment; `SUBMISSIONS_ENABLED` defaults to `false`. The GitHub variable becomes the source of truth for that switch, so change it before rerunning the workflow to pause submissions. Existing Worker secrets are not required for the first deployment.
 
 Use the base URL `https://cookii-reviews.<your-workers-subdomain>.workers.dev` for the frontend variable; the frontend appends `/reviews` in code. Activate your account's workers.dev subdomain before the first deployment. The workflow does not create Notion integrations or Turnstile widgets, choose the account plan, or configure GitHub repository settings.
+
+## Request and injection protections
+
+POST uploads are read at the public Worker after request throttling and before dispatch to
+`reviews-v1`. A submission must finish within a single five-second deadline and contain at
+most 4,096 actual bytes, even if Content-Length is missing or incorrect. Unsupported media
+or content encodings return 415; excess size returns 413; a stalled body returns 408;
+malformed JSON, invalid UTF-8, aborted uploads, and invalid fields return 400. Errors expose
+only a generic message. `reviews_request_rejected` records the status without request data.
+
+The Worker validates the submission and forwards a completed JSON body, so a client that
+trickles upload bytes cannot hold the shared Durable Object's serialization boundary. The
+handler also uses the bounded reader as defence in depth. Stream cancellation is best-effort
+and is never awaited on rejection. The five-second deadline may reject unusually slow
+connections; this endpoint accepts only a small text review. This is application-layer
+protection, not a replacement for platform DDoS controls or a total request-duration limit.
+
+Review strings remain plain text. Tests cover HTML event handlers, SVG, iframe breakouts,
+encoded markup, javascript URLs, and SQL-shaped input through the actual Notion adapter
+and browser review components. Notion writes use fixed endpoints and structured JSON; no
+SQL statements are constructed from user input. SQL-shaped text is allowed as harmless
+review content. Any future SQL integration must use parameterized queries, and rich HTML
+would require a dedicated sanitization design before enabling it.
+
+The `Security analysis` workflow runs CodeQL's `security-extended` JavaScript/TypeScript
+suite on PRs, main, and weekly. It scans frontend, backend, shared UI components, and
+application scripts for supported injection and other security data-flow patterns. The
+action is pinned to a commit and does not receive deployment secrets. Findings appear in
+GitHub code scanning; a completed analysis is not proof of no vulnerabilities. Configure
+repository rules to require code-scanning results before merge if enforcement is desired;
+this PR does not change branch protection or deploy a managed WAF. CodeQL reports source
+risks; it does not filter live requests.
+
+References: [OWASP DoS guidance](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html),
+[GitHub's JavaScript/TypeScript security queries](https://docs.github.com/en/code-security/reference/code-scanning/codeql/codeql-queries/javascript-typescript-built-in-queries).

@@ -1,4 +1,9 @@
-import { readJsonBody, reviewResponse, unavailableResponse } from '../http';
+import {
+  readJsonBody,
+  reviewResponse,
+  unavailableResponse,
+  invalidRequestResponse,
+} from '../http';
 import type { ReviewService } from '../service';
 import { parseSubmission } from '../submission';
 import { RequestDiagnostics } from '../../diagnostics';
@@ -12,8 +17,8 @@ export async function handleCreateReviews(
     let body: unknown;
     try {
       body = await readJsonBody(request);
-    } catch {
-      return Response.json({ message: 'Invalid review.' }, { status: 400 });
+    } catch (error) {
+      return invalidRequestResponse(error);
     }
     const input = parseSubmission(body);
     if (!input) return Response.json({}, { status: 400 });

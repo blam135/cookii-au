@@ -1,0 +1,15 @@
+name: Application security
+queries:
+  - uses: security-extended
+paths:
+  - app
+  - components
+  - hooks
+  - lib
+  - backend/src
+  - backend/scripts
+  - scripts
+paths-ignore:
+  - '**/node_modules/**'
+  - '**/.next/**'
+  - '**/out/**'

@@ -1,0 +1,40 @@
+name: Security analysis
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '19 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize security analysis
+        uses: github/codeql-action/init@800a1d8701a65d150a672fef0923dbf2660a62ec # v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          config-file: ./.github/codeql/security.yml
+      - name: Analyze application data flows
+        uses: github/codeql-action/analyze@800a1d8701a65d150a672fef0923dbf2660a62ec # v4
+        with:
+          category: /language:javascript-typescript

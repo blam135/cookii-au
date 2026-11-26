@@ -4,6 +4,8 @@ import {
   RequestDiagnostics,
   REQUEST_ID_HEADER,
 } from './diagnostics';
+import { readJsonBody, invalidRequestResponse } from './reviews/http';
+import { parseSubmission } from './reviews/submission';
 export { ReviewsStore } from './reviews/adapters/cloudflare';
 
 async function route(
@@ -49,7 +51,30 @@ async function route(
     });
     return Response.json({}, { status: 429, headers: { 'Retry-After': '60' } });
   }
-  const forwarded = new Request(request);
+  // Do not deliver a client-controlled stream to the shared object's lock.
+  // Read/validate at the edge, after throttling, before object dispatch.
+  let forwarded: Request;
+  if (request.method === 'POST') {
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+      if (!parseSubmission(body)) return invalidRequestResponse();
+    } catch (error) {
+      const response = invalidRequestResponse(error);
+      diagnostics.info({
+        event: 'reviews_request_rejected',
+        status: response.status,
+      });
+      return response;
+    }
+    const headers = new Headers(request.headers);
+    headers.delete('Content-Length');
+    headers.delete('Content-Encoding');
+    headers.set('Content-Type', 'application/json');
+    forwarded = new Request(request, { headers, body: JSON.stringify(body) });
+  } else {
+    forwarded = new Request(request);
+  }
   forwarded.headers.set(REQUEST_ID_HEADER, diagnostics.requestId);
   try {
     return await env.REVIEWS.get(env.REVIEWS.idFromName('reviews-v1')).fetch(
