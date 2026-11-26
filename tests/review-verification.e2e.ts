@@ -17,6 +17,7 @@ async function setup(
     rejected?: boolean;
     loadFailed?: boolean;
     pendingLoad?: Promise<void>;
+    pendingSave?: Promise<void>;
   } = {},
 ) {
   const rows = [
@@ -31,6 +32,7 @@ async function setup(
   await page.route(api, async (route) => {
     if (route.request().method() === 'POST') {
       submissions++;
+      if (options.pendingSave) await options.pendingSave;
       if (options.rejected)
         return route.fulfill({
           status: 403,
@@ -349,4 +351,83 @@ test('a slow initial read cannot replace a confirmed submission or cause another
   ).toHaveCount(1);
   expect(submissions()).toBe(1);
   expect(reads).toBe(1);
+});
+
+test('form validation rejects whitespace without consuming verification', async ({
+  page,
+}) => {
+  const submissions = await setup(page);
+  await fill(page);
+  await page.getByRole('textbox', { name: 'Your name' }).fill('   ');
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(page.locator('.review-status')).toContainText(
+    'Please add your name',
+  );
+  expect(submissions()).toBe(0);
+  await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
+    '   ',
+  );
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeEnabled();
+});
+
+test('rapid submissions send one trimmed review with the chosen rating and reset on success', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const pendingSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const payloads: unknown[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/reviews') && request.method() === 'POST')
+      payloads.push(request.postDataJSON());
+  });
+  const submissions = await setup(page, { pendingSave });
+  await page
+    .getByRole('textbox', { name: 'Your name' })
+    .fill(`  ${demoName}  `);
+  await page
+    .getByRole('textbox', { name: 'Your cookie moment' })
+    .fill(`  ${demoText}  `);
+  await page.getByRole('radio', { name: '2 stars', exact: true }).check();
+  await verify(page);
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeEnabled();
+  try {
+    await page.locator('.review-form').evaluate((form: HTMLFormElement) => {
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    await expect.poll(submissions).toBe(1);
+    await expect(page.getByRole('button', { name: /Sharing/ })).toBeDisabled();
+    await expect(
+      page.getByRole('textbox', { name: 'Your name' }),
+    ).toHaveAttribute('readonly', '');
+  } finally {
+    release();
+  }
+  await expect(page.locator('.review-status')).toContainText(
+    'Your review has been published.',
+  );
+  expect(payloads).toEqual([
+    {
+      name: demoName,
+      text: demoText,
+      rating: 2,
+      turnstileToken: 'test-only-token',
+    },
+  ]);
+  await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
+    '',
+  );
+  await expect(
+    page.getByRole('radio', { name: '5 stars', exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeDisabled();
 });
