@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build && node scripts/secure-export.mjs",
     "start": "next start",
-    "lint": "oxlint app lib scripts tests next.config.ts playwright.config.ts && pnpm --filter cookii-reviews-worker lint",
+    "lint": "next typegen && oxlint app lib scripts tests next.config.ts playwright.config.ts && pnpm --filter cookii-reviews-worker lint",
     "format": "oxfmt",
     "test": "playwright test --project=regression",
     "test:ui": "playwright test --project=regression --ui",

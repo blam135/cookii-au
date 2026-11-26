@@ -73,4 +73,4 @@ For an already-running app, omit `PLAYWRIGHT_START_SERVER` and set `PLAYWRIGHT_B
 
 Run `pnpm check:unused` to find unused files, exports, and dependencies across both workspace projects. Knip discovers Next.js routes and Playwright tests; standalone scripts are explicitly included.
 
-Run `pnpm lint` for frontend, shared code, scripts, tests, and backend linting. The backend deployment scripts have their own Node.js TypeScript configuration, separate from the Worker environment. CI runs this alongside Knip.
+Run `pnpm lint` for frontend, shared code, scripts, tests, and backend linting. It first generates Next.js type declarations so type-aware linting works on a fresh checkout without a prior build. The backend deployment scripts have their own Node.js TypeScript configuration, separate from the Worker environment. CI runs this alongside Knip.
