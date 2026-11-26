@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { useRef, useState, type SubmitEvent } from 'react';
 import { ArrowUpRight, Star } from 'lucide-react';
+import useSWR from 'swr';
 
 import ReviewVerification from './review-verification';
 
@@ -15,43 +16,28 @@ import {
 } from '@/lib/reviews';
 
 export default function Reviews() {
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const {
+    data: reviews = [],
+    error: loadError,
+    isLoading: loading,
+    mutate,
+  } = useSWR<Review[]>(
+    reviewsConfigured ? 'customer-reviews' : null,
+    loadReviews,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      shouldRetryOnError: false,
+    },
+  );
   const [rating, setRating] = useState(5);
   const [hovered, setHovered] = useState(0);
   const [status, setStatus] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
   const [verificationVersion, setVerificationVersion] = useState(0);
 
-  const [loading, setLoading] = useState(reviewsConfigured);
-  const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const saving = useRef(false);
-
-  useEffect(() => {
-    if (!reviewsConfigured) return;
-    let active = true;
-    loadReviews()
-      .then((loaded) => {
-        if (active)
-          setReviews((current) =>
-            [
-              ...current,
-              ...loaded.filter(
-                (row) => !current.some((item) => item.id === row.id),
-              ),
-            ].slice(0, 20),
-          );
-      })
-      .catch(() => {
-        if (active) setLoadError(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +61,12 @@ export default function Reviews() {
     setStatus('');
     try {
       const saved = await saveReview({ name, text, rating }, turnstileToken);
-      setReviews((current) => [saved, ...current].slice(0, 20));
+      // Publish only the confirmed server result; do not spend another GET quota.
+      await mutate(
+        (current = []) =>
+          [saved, ...current.filter((row) => row.id !== saved.id)].slice(0, 20),
+        { revalidate: false },
+      );
       setStatus('A little sweetness, shared. Your review has been published.');
       form.reset();
       setRating(5);
