@@ -21,6 +21,7 @@
     "wrangler": "4.166.0"
   },
   "dependencies": {
+    "@notionhq/client": "5.32.0",
     "hono": "4.13.22",
     "zod": "4.6.7"
   }
