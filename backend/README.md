@@ -90,6 +90,8 @@ replacement for the tested byte counting, stream cancellation, and absolute uplo
 Turnstile verification, persistent quotas, cache, serialization and outbound adapters are
 unchanged by the routing refactor.
 
+The Notion adapter uses the official `@notionhq/client` SDK for typed endpoint calls. Automatic retries are disabled so each reserved operation makes at most one provider request. A custom fetch preserves the eight-second abort deadline (including response bodies) and rejects redirects; SDK logging is suppressed in favor of the existing allowlisted diagnostics. Review mapping and runtime validation remain application responsibilities.
+
 ## Local development
 
 From the repository root:

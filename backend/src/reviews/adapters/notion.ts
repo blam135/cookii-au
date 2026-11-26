@@ -1,3 +1,4 @@
+import { Client, isNotionClientError, ClientErrorCode } from '@notionhq/client';
 import type { Environment } from '../../config';
 import type { Review, ReviewInput } from '../model';
 import type { ReviewRepository } from '../ports';
@@ -14,7 +15,7 @@ interface NotionText {
 }
 interface NotionPage {
   id: string;
-  properties: {
+  properties?: {
     Name?: { title: NotionText[] };
     Rating?: { number: number };
     Review?: { rich_text: NotionText[] };
@@ -22,83 +23,76 @@ interface NotionPage {
 }
 
 export class NotionReviewRepository implements ReviewRepository {
-  private readonly env: Pick<
-    Environment,
-    'NOTION_TOKEN' | 'NOTION_DATA_SOURCE_ID'
-  >;
-  private readonly fetcher: typeof fetch;
-  private readonly diagnostics: RequestDiagnostics;
-
   constructor(
-    env: Pick<Environment, 'NOTION_TOKEN' | 'NOTION_DATA_SOURCE_ID'>,
-    fetcher: typeof fetch = fetch,
-    diagnostics = new RequestDiagnostics(),
-  ) {
-    this.env = env;
-    // Workers fetch rejects a class instance as its receiver (Illegal invocation).
-    this.fetcher = fetcher.bind(globalThis);
-    this.diagnostics = diagnostics;
-  }
+    private readonly env: Pick<
+      Environment,
+      'NOTION_TOKEN' | 'NOTION_DATA_SOURCE_ID'
+    >,
+    private readonly fetcher: typeof fetch = fetch,
+    private readonly diagnostics = new RequestDiagnostics(),
+  ) {}
 
   private async request<T>(
     operation: 'query' | 'create',
-    path: string,
-    body: unknown,
+    execute: (client: Client) => Promise<T>,
   ): Promise<T> {
     const started = Date.now();
-    let response: Response;
-    try {
-      response = await this.fetcher(`https://api.notion.com/v1${path}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.env.NOTION_TOKEN}`,
-          'Notion-Version': '2025-09-03',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(8000),
-        redirect: 'manual',
-      });
-    } catch (error) {
-      this.diagnostics.error({
-        event: 'notion_transport_failed',
-        operation,
-        reason: failureReason(error),
-        durationMs: Date.now() - started,
-      });
-      throw new Error('Notion unavailable');
-    }
-    if (!response.ok) {
-      let body: unknown;
-      try {
-        body = await response.json();
-      } catch {
-        // Error bodies may be HTML or invalid JSON. Never log their raw contents.
-      }
-      this.diagnostics.error({
-        event: 'notion_request_failed',
-        operation,
-        status: response.status,
-        code: notionErrorCode(body),
-        durationMs: Date.now() - started,
-      });
-      throw new Error('Notion unavailable');
-    }
-    this.diagnostics.info({
-      event: 'notion_request_completed',
-      operation,
-      status: response.status,
-      durationMs: Date.now() - started,
+    let status: number | undefined;
+    const fetcher = this.fetcher.bind(globalThis);
+    const client = new Client({
+      auth: this.env.NOTION_TOKEN,
+      notionVersion: '2025-09-03',
+      retry: false,
+      timeoutMs: 8000,
+      // SDK logs can include upstream messages; emit only our allowlisted events.
+      logger: () => {},
+      fetch: async (url, init) => {
+        const response = await fetcher(url, {
+          ...init,
+          // Unlike the SDK's response-header timeout, this also aborts body reads.
+          signal: AbortSignal.timeout(8000),
+          redirect: 'manual',
+        });
+        status = response.status;
+        if (response.ok)
+          this.diagnostics.info({
+            event: 'notion_request_completed',
+            operation,
+            status,
+            durationMs: Date.now() - started,
+          });
+        return response;
+      },
     });
     try {
-      return await response.json<T>();
-    } catch {
-      this.diagnostics.error({
-        event: 'notion_response_invalid',
-        operation,
-        reason: 'json',
-      });
-      throw new Error('Invalid response');
+      return await execute(client);
+    } catch (error) {
+      if (status !== undefined && (status < 200 || status >= 300))
+        this.diagnostics.error({
+          event: 'notion_request_failed',
+          operation,
+          status,
+          code: notionErrorCode(error),
+          durationMs: Date.now() - started,
+        });
+      else if (status !== undefined)
+        this.diagnostics.error({
+          event: 'notion_response_invalid',
+          operation,
+          reason: 'json',
+        });
+      else
+        this.diagnostics.error({
+          event: 'notion_transport_failed',
+          operation,
+          reason:
+            isNotionClientError(error) &&
+            error.code === ClientErrorCode.RequestTimeout
+              ? 'timeout'
+              : failureReason(error),
+          durationMs: Date.now() - started,
+        });
+      throw new Error('Notion unavailable');
     }
   }
 
@@ -119,13 +113,12 @@ export class NotionReviewRepository implements ReviewRepository {
   }
 
   async load(): Promise<Review[]> {
-    const data = await this.request<{ results: NotionPage[] }>(
-      'query',
-      `/data_sources/${encodeURIComponent(this.env.NOTION_DATA_SOURCE_ID)}/query`,
-      {
+    const data = await this.request('query', (client) =>
+      client.dataSources.query({
+        data_source_id: this.env.NOTION_DATA_SOURCE_ID,
         page_size: 20,
         sorts: [{ timestamp: 'created_time', direction: 'descending' }],
-      },
+      }),
     );
     if (!data || !Array.isArray(data.results)) {
       this.diagnostics.error({
@@ -157,17 +150,19 @@ export class NotionReviewRepository implements ReviewRepository {
   }
 
   async save(input: ReviewInput): Promise<Review[]> {
-    const page = await this.request<NotionPage>('create', '/pages', {
-      parent: {
-        type: 'data_source_id',
-        data_source_id: this.env.NOTION_DATA_SOURCE_ID,
-      },
-      properties: {
-        Name: { title: [{ text: { content: input.name.trim() } }] },
-        Rating: { number: input.rating },
-        Review: { rich_text: [{ text: { content: input.text.trim() } }] },
-      },
-    });
+    const page = await this.request('create', (client) =>
+      client.pages.create({
+        parent: {
+          type: 'data_source_id',
+          data_source_id: this.env.NOTION_DATA_SOURCE_ID,
+        },
+        properties: {
+          Name: { title: [{ text: { content: input.name.trim() } }] },
+          Rating: { number: input.rating },
+          Review: { rich_text: [{ text: { content: input.text.trim() } }] },
+        },
+      }),
+    );
     try {
       const review = this.toReview(page);
       if (!review) throw new Error('Invalid response');
