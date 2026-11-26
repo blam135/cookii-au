@@ -7,9 +7,10 @@
     "check": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "deploy:ci": "node scripts/deploy.ts",
-    "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.scripts.json",
+    "typecheck": "tsc --project tsconfig.json && tsc --project scripts/tsconfig.json",
     "test": "playwright test --project=regression",
-    "test:ui": "playwright test --project=regression --ui"
+    "test:ui": "playwright test --project=regression --ui",
+    "lint": "oxlint --config ../.oxlintrc.json src scripts tests playwright.config.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261121.1",

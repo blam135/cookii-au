@@ -155,7 +155,11 @@ async function forwardReviewRequest(
     headers.delete('Content-Length');
     headers.delete('Content-Encoding');
     headers.set('Content-Type', 'application/json');
-    forwarded = new Request(request, { headers, body: JSON.stringify(body) });
+    forwarded = new Request(request, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
   } else {
     forwarded = new Request(request);
   }

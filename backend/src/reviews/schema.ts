@@ -6,6 +6,7 @@ const fields = {
     .string()
     .refine((value) => value.length <= 40)
     .refine((value) => value.trim().length > 0)
+    // oxlint-disable-next-line no-control-regex -- Reject forbidden controls in customer names.
     .refine((value) => !/[\u0000-\u001f\u007f]/u.test(value)),
   text: z
     .string()
@@ -13,6 +14,7 @@ const fields = {
     .refine((value) => value.trim().length > 0)
     // Tabs and line breaks remain valid in review text.
     .refine(
+      // oxlint-disable-next-line no-control-regex -- Reject controls while allowing tabs and line breaks.
       (value) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value),
     ),
   rating: z.number().int().min(1).max(5),
