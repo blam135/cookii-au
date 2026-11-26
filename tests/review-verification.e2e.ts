@@ -12,7 +12,12 @@ const demoText = 'A review used only by the isolated browser tests.';
 
 async function setup(
   page: Page,
-  options: { blocked?: boolean; rejected?: boolean } = {},
+  options: {
+    blocked?: boolean;
+    rejected?: boolean;
+    loadFailed?: boolean;
+    pendingLoad?: Promise<void>;
+  } = {},
 ) {
   const rows = [
     {
@@ -36,7 +41,10 @@ async function setup(
       rows.unshift(saved);
       return route.fulfill({ status: 201, json: [saved] });
     }
-    return route.fulfill({ json: rows });
+    const loaded = structuredClone(rows);
+    if (options.pendingLoad) await options.pendingLoad;
+    if (options.loadFailed) return route.fulfill({ status: 503, json: {} });
+    return route.fulfill({ json: loaded });
   });
   await page.route('https://challenges.cloudflare.com/**', (route) =>
     options.blocked
@@ -54,9 +62,10 @@ async function setup(
         }),
   );
   await page.goto('/#reviews');
-  await expect(
-    page.locator('.review-author').filter({ hasText: 'Sample customer' }),
-  ).toBeVisible();
+  if (!options.pendingLoad && !options.loadFailed)
+    await expect(
+      page.locator('.review-author').filter({ hasText: 'Sample customer' }),
+    ).toBeVisible();
   if (!options.blocked)
     await page.waitForFunction(() => '__reviewVerification' in window);
   return () => submissions;
@@ -277,3 +286,67 @@ for (const { name, text } of injectionPayloads) {
     expect(dialogs).toEqual([]);
   });
 }
+
+test('focus and reconnect do not refetch reviews', async ({ page }) => {
+  await page.clock.install();
+  let reads = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/reviews') && request.method() === 'GET')
+      reads++;
+  });
+  await setup(page);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('online'));
+  });
+  await page.clock.fastForward(60_000);
+  expect(reads).toBe(1);
+});
+
+test('failed reads remain visible without automatic retries', async ({
+  page,
+}) => {
+  await page.clock.install();
+  let reads = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/reviews') && request.method() === 'GET')
+      reads++;
+  });
+  await setup(page, { loadFailed: true });
+  await expect(page.locator('.review-list')).toContainText(
+    'We couldn’t load reviews.',
+  );
+  await page.clock.fastForward(60_000);
+  expect(reads).toBe(1);
+});
+
+test('a slow initial read cannot replace a confirmed submission or cause another fetch', async ({
+  page,
+}) => {
+  let release!: () => void;
+  const pendingLoad = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/reviews') && request.method() === 'GET')
+      reads++;
+  });
+  const submissions = await setup(page, { pendingLoad });
+  try {
+    await fill(page);
+    await verify(page);
+    await page.getByRole('button', { name: /Share a little love/ }).click();
+    await expect(page.locator('.review-status')).toContainText(
+      'Your review has been published.',
+    );
+  } finally {
+    release();
+  }
+  await expect(page.getByText('Loading sweet words…')).toBeHidden();
+  await expect(
+    page.locator('.review-card').filter({ hasText: demoText }),
+  ).toHaveCount(1);
+  expect(submissions()).toBe(1);
+  expect(reads).toBe(1);
+});

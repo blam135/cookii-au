@@ -36,6 +36,8 @@ Use `nvm use` to select the patched Node.js version in `.nvmrc`. Supported Node.
 
 The static website calls a Cloudflare Worker → Durable Object → Notion data source. The browser receives only the API URL and public Turnstile site key; the Notion integration token stays in Worker secrets. Reviews publish immediately, without sign-in or moderation. The UI displays the latest 20 reviews.
 
+SWR manages browser review loading and cached results. Focus/reconnect revalidation and automatic read retries are disabled. Successful submissions update that browser cache from the confirmed server response without an extra GET; the Worker still owns shared caching and quotas.
+
 See [backend setup and deployment](backend/README.md) for the backend architecture, configuration, and local development instructions. Copy `.env.example` to `.env.local`, set `NEXT_PUBLIC_REVIEWS_API_URL` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, and restart development. For production, set the same GitHub Actions repository variables and rebuild the website.
 
 Reviews are hidden by default. Set `NEXT_PUBLIC_REVIEWS_ENABLED=true` in `.env.local` to show them locally; only the exact value `true` enables the feature. When disabled, the section does not render and makes no review API or Turnstile requests.
