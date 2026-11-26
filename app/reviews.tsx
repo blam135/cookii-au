@@ -3,17 +3,27 @@
 import { useRef, useState, type SubmitEvent } from 'react';
 import { ArrowUpRight, Star } from 'lucide-react';
 import useSWR from 'swr';
+import { useController, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 import ReviewVerification from './review-verification';
 
 import {
   ReviewError,
-  isReviewInput,
+  clientReviewInputSchema,
   loadReviews,
   reviewsConfigured,
   saveReview,
   type Review,
+  type ReviewInput,
 } from '@/lib/reviews';
+
+// Trim browser form values before applying the shared validation policy.
+const formSchema = clientReviewInputSchema.extend({
+  name: z.string().trim().pipe(clientReviewInputSchema.shape.name),
+  text: z.string().trim().pipe(clientReviewInputSchema.shape.text),
+});
 
 export default function Reviews() {
   const {
@@ -30,37 +40,47 @@ export default function Reviews() {
       shouldRetryOnError: false,
     },
   );
-  const [rating, setRating] = useState(5);
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    formState: { isSubmitting: submitting },
+  } = useForm<ReviewInput>({
+    resolver: zodResolver(formSchema),
+    defaultValues: { name: '', text: '', rating: 5 },
+  });
+  const { field: ratingField } = useController({ control, name: 'rating' });
+  const rating = ratingField.value;
   const [hovered, setHovered] = useState(0);
   const [status, setStatus] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
   const [verificationVersion, setVerificationVersion] = useState(0);
 
-  const [submitting, setSubmitting] = useState(false);
   const saving = useRef(false);
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Lock before async schema validation, so rapid submissions cannot overlap.
     if (saving.current || !reviewsConfigured) return;
+    saving.current = true;
+    try {
+      await handleSubmit(save, () =>
+        setStatus('Please add your name and a few words about your cookies.'),
+      )(event);
+    } finally {
+      saving.current = false;
+    }
+  }
+
+  async function save(input: ReviewInput) {
     if (!turnstileToken) {
       setStatus('Please complete the spam verification.');
       return;
     }
-    const form = event.currentTarget;
-    const fields = new FormData(form);
-    const nameField = fields.get('name');
-    const textField = fields.get('review');
-    const name = typeof nameField === 'string' ? nameField.trim() : '';
-    const text = typeof textField === 'string' ? textField.trim() : '';
-    if (!isReviewInput({ name, text, rating })) {
-      setStatus('Please add your name and a few words about your cookies.');
-      return;
-    }
-    saving.current = true;
-    setSubmitting(true);
     setStatus('');
     try {
-      const saved = await saveReview({ name, text, rating }, turnstileToken);
+      const saved = await saveReview(input, turnstileToken);
       // Publish only the confirmed server result; do not spend another GET quota.
       await mutate(
         (current = []) =>
@@ -68,8 +88,7 @@ export default function Reviews() {
         { revalidate: false },
       );
       setStatus('A little sweetness, shared. Your review has been published.');
-      form.reset();
-      setRating(5);
+      reset();
       setHovered(0);
     } catch (error) {
       setStatus(
@@ -78,8 +97,6 @@ export default function Reviews() {
           : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
       );
     } finally {
-      saving.current = false;
-      setSubmitting(false);
       setTurnstileToken('');
       setVerificationVersion((v) => v + 1);
     }
@@ -164,10 +181,12 @@ export default function Reviews() {
                 >
                   <input
                     type="radio"
-                    name="rating"
+                    name={ratingField.name}
                     value={star}
                     checked={rating === star}
-                    onChange={() => setRating(star)}
+                    onChange={() => ratingField.onChange(star)}
+                    onBlur={ratingField.onBlur}
+                    ref={ratingField.ref}
                     onMouseEnter={() => setHovered(star)}
                     onMouseLeave={() => setHovered(0)}
                     aria-label={`${star} ${star === 1 ? 'star' : 'stars'}`}
@@ -180,8 +199,9 @@ export default function Reviews() {
           <label className="review-field">
             Your name
             <input
-              disabled={submitting || !reviewsConfigured}
-              name="name"
+              disabled={!reviewsConfigured}
+              readOnly={submitting}
+              {...register('name')}
               placeholder="First name is lovely"
               maxLength={40}
               required
@@ -191,8 +211,9 @@ export default function Reviews() {
           <label className="review-field">
             Your cookie moment
             <textarea
-              disabled={submitting || !reviewsConfigured}
-              name="review"
+              disabled={!reviewsConfigured}
+              readOnly={submitting}
+              {...register('text')}
               placeholder="The flavour, the first bite, the empty box…"
               rows={4}
               maxLength={400}

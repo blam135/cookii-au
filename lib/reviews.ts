@@ -4,6 +4,7 @@ import {
   type Review,
   type ReviewInput,
 } from '../backend/src/reviews/schema';
+export { clientReviewInputSchema };
 export type { Review, ReviewInput } from '../backend/src/reviews/schema';
 
 const baseUrl = process.env.NEXT_PUBLIC_REVIEWS_API_URL?.replace(/\/+$/, '');
@@ -30,7 +31,7 @@ export class ReviewError extends Error {
   }
 }
 
-export function isReviewInput(value: unknown): value is ReviewInput {
+function isReviewInput(value: unknown): value is ReviewInput {
   return clientReviewInputSchema.safeParse(value).success;
 }
 

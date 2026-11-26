@@ -38,6 +38,8 @@ The static website calls a Cloudflare Worker → Durable Object → Notion data 
 
 SWR manages browser review loading and cached results. Focus/reconnect revalidation and automatic read retries are disabled. Successful submissions update that browser cache from the confirmed server response without an extra GET; the Worker still owns shared caching and quotas.
 
+React Hook Form owns review form values, submission state, and successful resets. Its Zod resolver trims browser fields before applying the shared schema; failed submissions keep the values, and a submission lock prevents overlapping requests during async validation. The root Zod dependency supplies the resolver’s peer dependency and browser-only normalization.
+
 See [backend setup and deployment](backend/README.md) for the backend architecture, configuration, and local development instructions. Copy `.env.example` to `.env.local`, set `NEXT_PUBLIC_REVIEWS_API_URL` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, and restart development. For production, set the same GitHub Actions repository variables and rebuild the website.
 
 Reviews are hidden by default. Set `NEXT_PUBLIC_REVIEWS_ENABLED=true` in `.env.local` to show them locally; only the exact value `true` enables the feature. When disabled, the section does not render and makes no review API or Turnstile requests.
@@ -69,4 +71,4 @@ For an already-running app, omit `PLAYWRIGHT_START_SERVER` and set `PLAYWRIGHT_B
 
 ## Unused code
 
-Run `pnpm check:unused` to find unused files, exports, and dependencies across both workspace projects. Knip discovers Next.js routes and Playwright tests; standalone scripts are explicitly included. Shared review schemas resolve Zod from the backend workspace, so the frontend does not need a duplicate dependency declaration.
+Run `pnpm check:unused` to find unused files, exports, and dependencies across both workspace projects. Knip discovers Next.js routes and Playwright tests; standalone scripts are explicitly included.
