@@ -64,3 +64,7 @@ NEXT_PUBLIC_REVIEWS_ENABLED=true PLAYWRIGHT_START_SERVER=true PLAYWRIGHT_BASE_UR
 Enabled builds run the review/verification scenarios; disabled builds check that the section is absent and no review or Turnstile requests occur. To test the disabled state, rebuild with `NEXT_PUBLIC_REVIEWS_ENABLED=false` and pass `false` to the test command too. CI uses the same flag for its build and browser tests.
 
 For an already-running app, omit `PLAYWRIGHT_START_SERVER` and set `PLAYWRIGHT_BASE_URL` to its address. `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` optionally selects an installed browser. CI tests the static export with both projects before publishing, and produces an HTML report and failure traces.
+
+## Unused code
+
+Run `pnpm check:unused` to find unused files, exports, and dependencies across both workspace projects. Knip discovers Next.js routes and Playwright tests; standalone scripts are explicitly included. Shared review schemas resolve Zod from the backend workspace, so the frontend does not need a duplicate dependency declaration.
