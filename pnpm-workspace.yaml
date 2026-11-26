@@ -1,0 +1,11 @@
+packages:
+  - backend
+
+overrides:
+  undici: ^7.30.1
+
+# Only native tooling needed by the build and Worker runtime may run install scripts.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: true

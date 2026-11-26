@@ -12,10 +12,15 @@ on:
       - 'backend/src/reviews/schema.ts'
       - 'scripts/**'
       - 'tests/**'
-      - 'package*.json'
+      - 'backend/package.json'
       - 'playwright.config.ts'
       - 'next.config.ts'
       - '.env.example'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.nvmrc'
+      - 'package.json'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -42,37 +47,40 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: '.nvmrc'
-          cache: npm
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Security regression tests
-        run: npm test
+        run: pnpm test
 
       - name: Dependency audit
-        run: npm audit --audit-level=low
+        run: pnpm audit --audit-level=low
 
       - name: Build frontend static site
         env:
           NEXT_PUBLIC_REVIEWS_ENABLED: ${{ vars.NEXT_PUBLIC_REVIEWS_ENABLED || 'false' }}
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
           NEXT_PUBLIC_REVIEWS_API_URL: ${{ vars.NEXT_PUBLIC_REVIEWS_API_URL }}
-        run: npm run build
+        run: pnpm run build
 
       - name: Install Chromium for frontend browser checks
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Test exported frontend in Chromium
         env:
           NEXT_PUBLIC_REVIEWS_ENABLED: ${{ vars.NEXT_PUBLIC_REVIEWS_ENABLED || 'false' }}
           PLAYWRIGHT_START_SERVER: 'true'
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-        run: npx playwright test --project=chromium
+        run: pnpm exec playwright test --project=chromium
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
@@ -90,20 +98,23 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: '.nvmrc'
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - name: Build isolated security fixture (never published)
-        run: npm run build
+        run: pnpm run build
         env:
           NEXT_PUBLIC_REVIEWS_ENABLED: 'true'
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: test-only-site-key
           NEXT_PUBLIC_REVIEWS_API_URL: https://reviews.example.invalid
-      - run: npx playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium
       - name: Run browser security and verification checks
-        run: npx playwright test --project=chromium
+        run: pnpm exec playwright test --project=chromium
         env:
           NEXT_PUBLIC_REVIEWS_ENABLED: 'true'
           PLAYWRIGHT_START_SERVER: 'true'
