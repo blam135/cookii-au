@@ -28,20 +28,20 @@ const formSchema = clientReviewInputSchema.extend({
 
 export default function Reviews() {
   const {
-    data,
-    error: loadError,
+    data: fetchedReviews,
     isLoading: loading,
     mutate,
-  } = useSWR<Review[]>(
+  } = useSWR<Review[] | null>(
     reviewsConfigured ? 'customer-reviews' : null,
-    loadReviews,
+    () => loadReviews().catch(() => null),
     {
       focusThrottleInterval: 0,
       dedupingInterval: 0,
       shouldRetryOnError: false,
     },
   );
-  const reviews = loadError ? [] : (data ?? []);
+  const loadError = fetchedReviews === null;
+  const reviews = fetchedReviews ?? [];
   const {
     register,
     control,
@@ -91,8 +91,11 @@ export default function Reviews() {
       const saved = await saveReview(input, turnstileToken);
       // Publish only the confirmed server result; do not spend another GET quota.
       await mutate(
-        (current = []) =>
-          [saved, ...current.filter((row) => row.id !== saved.id)].slice(0, 20),
+        (current) =>
+          [saved, ...(current ?? []).filter((row) => row.id !== saved.id)].slice(
+            0,
+            20,
+          ),
         { revalidate: false },
       );
       setStatus({

@@ -346,11 +346,15 @@ test('returning to the tab reflects a removed review and a reload keeps it remov
   );
 });
 
-test('a failed read on reconnect hides previously displayed reviews', async ({
+test('publishing after a failed refresh keeps old reviews hidden', async ({
   page,
 }) => {
   await setup(page);
-  await page.route(api, (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route(api, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fallback(),
+  );
   await page.evaluate(() => {
     window.dispatchEvent(new Event('offline'));
     window.dispatchEvent(new Event('online'));
@@ -359,6 +363,11 @@ test('a failed read on reconnect hides previously displayed reviews', async ({
     'We couldn’t load reviews.',
   );
   await expect(page.locator('.review-card')).toHaveCount(0);
+  await fill(page);
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(page.locator('.review-author')).toHaveText(new RegExp(demoName));
+  await expect(page.locator('.review-card')).toHaveCount(1);
 });
 
 test('failed reads remain visible without automatic retries', async ({
