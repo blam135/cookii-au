@@ -7,7 +7,7 @@ import { useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
-import ReviewStatus, { type ReviewFeedback } from './review-status';
+import ReviewStatus from './review-status';
 import ReviewVerification, {
   type ReviewVerificationState,
 } from './review-verification';
@@ -57,7 +57,7 @@ export default function Reviews() {
   const { field: ratingField } = useController({ control, name: 'rating' });
   const rating = ratingField.value;
   const [hovered, setHovered] = useState(0);
-  const [status, setStatus] = useState<ReviewFeedback | null>(null);
+  const [formError, setFormError] = useState('');
   const [verification, setVerification] = useState<ReviewVerificationState>({
     token: '',
   });
@@ -72,10 +72,9 @@ export default function Reviews() {
     saving.current = true;
     try {
       await handleSubmit(save, () =>
-        setStatus({
-          tone: 'error',
-          message: 'Please add your name and a few words about your cookies.',
-        }),
+        setFormError(
+          'Please add your name and a few words about your cookies.',
+        ),
       )(event);
     } finally {
       saving.current = false;
@@ -84,38 +83,29 @@ export default function Reviews() {
 
   async function save(input: ReviewInput) {
     if (!verification.token) {
-      setStatus({
-        tone: 'error',
-        message: 'Please complete verification before sharing.',
-      });
+      setFormError('Please complete verification before sharing.');
       return;
     }
-    setStatus(null);
+    setFormError('');
     try {
       const saved = await saveReview(input, verification.token);
       // Publish only the confirmed server result; do not spend another GET quota.
       await mutate(
         (current) =>
-          [saved, ...(current ?? []).filter((row) => row.id !== saved.id)].slice(
-            0,
-            20,
-          ),
+          [
+            saved,
+            ...(current ?? []).filter((row) => row.id !== saved.id),
+          ].slice(0, 20),
         { revalidate: false },
       );
-      setStatus({
-        tone: 'success',
-        message: 'Your review has been published.',
-      });
       reset();
       setHovered(0);
     } catch (error) {
-      setStatus({
-        tone: 'error',
-        message:
-          error instanceof ReviewError && [403, 409, 429].includes(error.status)
-            ? error.message
-            : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
-      });
+      setFormError(
+        error instanceof ReviewError && [403, 409, 429].includes(error.status)
+          ? error.message
+          : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
+      );
     } finally {
       setVerification({ token: '' });
       setVerificationVersion((v) => v + 1);
@@ -141,7 +131,7 @@ export default function Reviews() {
         <form
           className="review-form"
           onSubmit={submit}
-          onChange={() => setStatus(null)}
+          onChange={() => setFormError('')}
         >
           <span className="review-form-flourish" aria-hidden="true">
             ✦
@@ -214,14 +204,7 @@ export default function Reviews() {
             {submitting ? 'Sharing…' : 'Share a little love'}{' '}
             <ArrowUpRight size={17} aria-hidden="true" />
           </button>
-          <ReviewStatus
-            feedback={
-              status ??
-              (verification.error
-                ? { tone: 'error', message: verification.error }
-                : null)
-            }
-          />
+          <ReviewStatus error={formError || verification.error} />
           <p className="review-storage-note">
             {reviewsConfigured
               ? 'Your name, rating, and review will be visible to everyone.'

@@ -125,9 +125,6 @@ test('publishes a review through the form and loads it after refresh', async ({
   await fill(page);
   await verify(page);
   await page.getByRole('button', { name: /Share a little love/ }).click();
-  await expect(page.locator('.review-status')).toContainText(
-    'Your review has been published.',
-  );
   await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
     '',
   );
@@ -136,8 +133,7 @@ test('publishes a review through the form and loads it after refresh', async ({
   ).toBeVisible();
   expect(submissions()).toBe(1);
   const formStatus = page.locator('.review-form').getByRole('status');
-  await expect(formStatus).toHaveCount(1);
-  await expect(formStatus).toHaveText('Your review has been published.');
+  await expect(formStatus).toBeHidden();
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeDisabled();
@@ -146,9 +142,7 @@ test('publishes a review through the form and loads it after refresh', async ({
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeEnabled();
-  await expect(formStatus).toHaveText('Your review has been published.');
-  await page.getByRole('textbox', { name: 'Your name' }).fill('Next customer');
-  await expect(formStatus).toBeEmpty();
+  await expect(formStatus).toBeHidden();
   await page.reload();
   await expect(
     page.locator('.review-author').filter({ hasText: demoName }),
@@ -288,9 +282,6 @@ test('stored hostile review fields remain text after submission and reload', asy
   await page.getByRole('textbox', { name: 'Your cookie moment' }).fill(text);
   await verify(page);
   await page.getByRole('button', { name: /Share a little love/ }).click();
-  await expect(page.locator('.review-status')).toContainText(
-    'Your review has been published.',
-  );
   for (const reload of [false, true]) {
     if (reload) await page.reload();
     const review = page.locator('.review-card').filter({ hasText: text });
@@ -417,8 +408,8 @@ test('a slow initial read cannot replace a confirmed submission or cause another
     await fill(page);
     await verify(page);
     await page.getByRole('button', { name: /Share a little love/ }).click();
-    await expect(page.locator('.review-status')).toContainText(
-      'Your review has been published.',
+    await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
+      '',
     );
   } finally {
     release();
@@ -446,6 +437,8 @@ test('form validation rejects whitespace without consuming verification', async 
   await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
     '   ',
   );
+  await page.getByRole('textbox', { name: 'Your name' }).fill(demoName);
+  await expect(page.locator('.review-status')).toBeHidden();
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeEnabled();
@@ -488,9 +481,6 @@ test('rapid submissions send one trimmed review with the chosen rating and reset
   } finally {
     release();
   }
-  await expect(page.locator('.review-status')).toContainText(
-    'Your review has been published.',
-  );
   expect(payloads).toEqual([
     {
       name: demoName,
