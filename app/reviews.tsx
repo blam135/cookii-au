@@ -28,7 +28,7 @@ const formSchema = clientReviewInputSchema.extend({
 
 export default function Reviews() {
   const {
-    data: reviews = [],
+    data,
     error: loadError,
     isLoading: loading,
     mutate,
@@ -36,11 +36,12 @@ export default function Reviews() {
     reviewsConfigured ? 'customer-reviews' : null,
     loadReviews,
     {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
+      focusThrottleInterval: 0,
+      dedupingInterval: 0,
       shouldRetryOnError: false,
     },
   );
+  const reviews = loadError ? [] : (data ?? []);
   const {
     register,
     control,

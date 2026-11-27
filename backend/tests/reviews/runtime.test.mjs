@@ -72,8 +72,9 @@ function submit(mf) {
   });
 }
 
-test('Worker runtime reads, verifies, creates and serves updated cached reviews', async () => {
+test('Worker runtime reads a created review and reflects its deletion in Notion', async () => {
   const calls = [];
+  const notionPages = [];
   const mf = runtime(async (request) => {
     calls.push(request.url);
     const url = new URL(request.url);
@@ -84,10 +85,13 @@ test('Worker runtime reads, verifies, creates and serves updated cached reviews'
         action: 'review',
       });
     assert.equal(url.hostname, 'api.notion.com');
-    if (url.pathname.endsWith('/query')) return Response.json({ results: [] });
+    if (url.pathname.endsWith('/query'))
+      return Response.json({ results: notionPages });
     assert.equal(url.pathname, '/v1/pages');
     const body = await request.json();
-    return Response.json({ id: 'test-review', properties: body.properties });
+    const page = { id: 'test-review', properties: body.properties };
+    notionPages.push(page);
+    return Response.json(page);
   });
   try {
     const first = await mf.dispatchFetch('https://api.example/reviews');
@@ -104,11 +108,15 @@ test('Worker runtime reads, verifies, creates and serves updated cached reviews'
         text: input.text,
       },
     ]);
-    const cached = await mf.dispatchFetch('https://api.example/reviews');
-    assert.equal(cached.status, 200);
-    assert.deepEqual(await cached.json(), rows);
-    assert.equal(calls.length, 3);
-    assert.equal(calls.filter((url) => url.endsWith('/query')).length, 1);
+    const listed = await mf.dispatchFetch('https://api.example/reviews');
+    assert.equal(listed.status, 200);
+    assert.deepEqual(await listed.json(), rows);
+    notionPages.length = 0;
+    const afterDeletion = await mf.dispatchFetch('https://api.example/reviews');
+    assert.equal(afterDeletion.status, 200);
+    assert.deepEqual(await afterDeletion.json(), []);
+    assert.equal(calls.length, 5);
+    assert.equal(calls.filter((url) => url.endsWith('/query')).length, 3);
   } finally {
     await mf.dispose();
   }

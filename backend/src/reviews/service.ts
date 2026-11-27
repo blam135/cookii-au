@@ -17,16 +17,8 @@ export class ReviewService {
   }
 
   async list(now = Date.now()): Promise<ReviewResult> {
-    const cache = await this.state.getCache();
-    if (cache && now < cache.expires)
-      return { kind: 'success', reviews: cache.rows };
-    if (!(await this.state.reserveRead(now)))
-      return cache
-        ? { kind: 'success', reviews: cache.rows }
-        : { kind: 'rate-limited' };
-    const rows = await this.repository.load();
-    await this.state.setCache({ rows, expires: now + 60000 });
-    return { kind: 'success', reviews: rows };
+    if (!(await this.state.reserveRead(now))) return { kind: 'rate-limited' };
+    return { kind: 'success', reviews: await this.repository.load() };
   }
 
   async submit(
@@ -41,13 +33,6 @@ export class ReviewService {
     if (!(await this.state.reserveVerifiedSubmission(now)))
       return { kind: 'rate-limited' };
     const { verificationToken: _token, ...input } = submission;
-    const rows = await this.repository.save(input);
-    const cache = await this.state.getCache();
-    if (cache)
-      await this.state.setCache({
-        ...cache,
-        rows: [...rows, ...cache.rows].slice(0, 20),
-      });
-    return { kind: 'success', reviews: rows };
+    return { kind: 'success', reviews: await this.repository.save(input) };
   }
 }

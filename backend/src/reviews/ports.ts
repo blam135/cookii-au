@@ -1,4 +1,4 @@
-import type { Review, ReviewInput, ReviewCache } from './model';
+import type { Review, ReviewInput } from './model';
 
 export interface ReviewRepository {
   load(): Promise<Review[]>;
@@ -11,8 +11,6 @@ export interface ChallengeVerifier {
 
 // Calls are coordinated inside the state adapter's serialized request boundary.
 export interface ReviewState {
-  getCache(): Promise<ReviewCache | undefined>;
-  setCache(cache: ReviewCache): Promise<void>;
   reserveRead(now: number): Promise<boolean>;
   reserveVerifiedSubmission(now: number): Promise<boolean>;
   reserveSubmission(ip: string, now: number): Promise<boolean>;

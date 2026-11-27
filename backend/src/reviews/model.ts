@@ -5,11 +5,6 @@ export function isReviewInput(value: unknown): value is ReviewInput {
   return reviewInputSchema.safeParse(value).success;
 }
 
-export interface ReviewCache {
-  rows: Review[];
-  expires: number;
-}
-
 export type ReviewResult =
   | { kind: 'success'; reviews: Review[] }
   | { kind: 'rate-limited' }
