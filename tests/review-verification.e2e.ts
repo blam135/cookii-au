@@ -108,6 +108,13 @@ test('loads reviews and blocks submission until verification completes', async (
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeDisabled();
+  const formStatus = page.locator('.review-form').getByRole('status');
+  await expect(formStatus).toBeEmpty();
+  await verify(page);
+  await expect(
+    page.getByRole('button', { name: /Share a little love/ }),
+  ).toBeEnabled();
+  await expect(formStatus).toBeEmpty();
   expect(submissions()).toBe(0);
 });
 
@@ -128,9 +135,9 @@ test('publishes a review through the form and loads it after refresh', async ({
     page.locator('.review-author').filter({ hasText: demoName }),
   ).toBeVisible();
   expect(submissions()).toBe(1);
-  await expect(page.locator('.review-verification-status')).toContainText(
-    'Complete verification to share your review.',
-  );
+  const formStatus = page.locator('.review-form').getByRole('status');
+  await expect(formStatus).toHaveCount(1);
+  await expect(formStatus).toHaveText('Your review has been published.');
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeDisabled();
@@ -139,6 +146,9 @@ test('publishes a review through the form and loads it after refresh', async ({
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeEnabled();
+  await expect(formStatus).toHaveText('Your review has been published.');
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Next customer');
+  await expect(formStatus).toBeEmpty();
   await page.reload();
   await expect(
     page.locator('.review-author').filter({ hasText: demoName }),
@@ -149,7 +159,7 @@ test('a blocked verification script displays a useful error', async ({
   page,
 }) => {
   await setup(page, { blocked: true });
-  await expect(page.locator('.review-verification-status')).toContainText(
+  await expect(page.locator('.review-status')).toContainText(
     'We couldn’t load the verification.',
   );
   await expect(
@@ -161,7 +171,7 @@ test('challenge failure is visible and keeps the form', async ({ page }) => {
   await setup(page);
   await fill(page);
   await verify(page, 'error');
-  await expect(page.locator('.review-verification-status')).toContainText(
+  await expect(page.locator('.review-status')).toContainText(
     'Verification failed.',
   );
   await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
@@ -181,7 +191,7 @@ test('expiry disables submission until a new verification completes', async ({
     page.getByRole('button', { name: /Share a little love/ }),
   ).toBeEnabled();
   await verify(page, 'expired');
-  await expect(page.locator('.review-verification-status')).toContainText(
+  await expect(page.locator('.review-status')).toContainText(
     'Verification expired.',
   );
   await expect(
@@ -221,9 +231,9 @@ test('verification fits the form as the review layout changes columns', async ({
   await setup(page);
   await verify(page, 'error');
   const widget = page.getByLabel('Spam verification');
-  const status = page.locator('.review-verification-status');
+  const status = page.locator('.review-status');
   await expect(status).toContainText('Verification failed.');
-  for (const width of [320, 390, 900, 901, 1440]) {
+  for (const width of [320, 390, 900, 901, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     const [form, heading, list, field, verification, notice] =
       await Promise.all(
@@ -247,6 +257,10 @@ test('verification fits the form as the review layout changes columns', async ({
     expect(notice.y).toBeGreaterThanOrEqual(
       verification.y + verification.height,
     );
+    if (width === 1920) {
+      expect(form.x).toBeLessThan(width * 0.14);
+      expect(form.width).toBeGreaterThan(width * 0.3);
+    }
     if (width <= 900) {
       expect(form.x).toBeCloseTo(heading.x, 0);
       expect(form.y).toBeGreaterThanOrEqual(heading.y + heading.height);
