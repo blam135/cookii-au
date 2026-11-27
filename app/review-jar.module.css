@@ -21,16 +21,55 @@
 }
 
 .jarArt {
+  position: relative;
   display: block;
-  width: min(100%, 21rem);
-  height: auto;
-  filter: drop-shadow(0 0.85rem 0.75rem #50301535);
-  transition: transform 280ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  width: min(100%, 20rem);
+  aspect-ratio: 1 / 1.15;
+  pointer-events: none;
 }
 
-.jar:hover .jarArt,
-.jar:focus-visible .jarArt {
-  transform: translateY(-0.3rem) rotate(-2deg);
+.body,
+.mouth,
+.lid {
+  position: absolute;
+  display: block;
+}
+
+.body {
+  inset: auto 0 0;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0.85rem 0.75rem #50301535);
+}
+
+.mouth {
+  left: 16.5%;
+  top: 24.7%;
+  width: 67%;
+  height: 8.3%;
+}
+
+.lid {
+  left: 12%;
+  bottom: 65.7%;
+  width: 76%;
+  height: auto;
+  transform-origin: 60% 80%;
+  transition: transform 420ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+@media (hover: hover) {
+  .jar:hover .lid {
+    transform: translate(15%, -39%) rotate(-13deg);
+  }
+}
+
+.jar:focus-visible .lid {
+  transform: translate(15%, -39%) rotate(-13deg);
+}
+
+.jar:has(+ .dialog[open]) .lid {
+  transform: translate(28%, -66%) rotate(-22deg);
 }
 
 .jarLabel {
@@ -72,16 +111,14 @@
   max-width: none;
   max-height: none;
   padding: 0;
-  overflow: hidden;
-  border: 1px solid #d9bfaa;
-  border-radius: clamp(1.125rem, 3vw, 2rem);
-  background: var(--paper);
+  overflow: visible;
+  border: 0;
+  background: transparent;
   color: var(--ink);
-  box-shadow: 0 1.5rem 5rem #2b17094d;
 }
 
-.dialog[open] {
-  animation: jar-open 280ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+.dialog[data-empty] {
+  width: min(32rem, calc(100% - 2rem));
 }
 
 .dialog::backdrop {
@@ -93,6 +130,15 @@
   display: flex;
   flex-direction: column;
   max-height: min(46rem, calc(100dvh - 2rem - 2px));
+  overflow: hidden;
+  border: 1px solid #d9bfaa;
+  border-radius: clamp(1.125rem, 3vw, 2rem);
+  background: var(--paper);
+  box-shadow: 0 1.5rem 5rem #2b17094d;
+}
+
+.openingView {
+  display: none;
 }
 
 .dialogHeader {
@@ -147,6 +193,27 @@
   display: block;
   margin: 0;
   color: #62594e;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  padding: 0.25rem 0 1rem;
+  text-align: center;
+}
+
+.emptyGlass {
+  width: min(100%, 15rem, 32dvh);
+  height: auto;
+  filter: drop-shadow(0 0.3rem 0.4rem #50301529);
+}
+
+.emptyState p {
+  max-width: 19ch;
+  margin: 0;
+  color: var(--cocoa);
+  font: 600 clamp(1.45rem, 3vw, 1.85rem) / 1.15 var(--font-display);
 }
 
 .list {
@@ -229,15 +296,81 @@
   overflow-wrap: anywhere;
 }
 
-@keyframes jar-open {
-  from {
-    opacity: 0;
-    transform: translateY(0.65rem) scale(0.98);
+@media (prefers-reduced-motion: no-preference) {
+  .dialog[open] {
+    --opening-time: 960ms;
   }
 
-  to {
+  .dialog[open]::backdrop {
+    animation: dim-kitchen var(--opening-time, 960ms) ease both;
+  }
+
+  .dialog[open] .openingView {
+    position: fixed;
+    z-index: 1;
+    top: 50%;
+    left: 50%;
+    display: block;
+    width: var(--opening-size);
+    height: auto;
+    translate: -50% -50%;
+    pointer-events: none;
+    animation: look-inside var(--opening-time) cubic-bezier(0.35, 0.05, 0.25, 1)
+      both;
+  }
+
+  .dialog[open] .dialogContent {
+    animation: show-reviews var(--opening-time) ease-out both;
+  }
+}
+
+@keyframes look-inside {
+  0%,
+  9% {
+    visibility: visible;
+    opacity: 0;
+    transform: var(--from-mouth);
+  }
+  18% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: var(--from-mouth);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.04);
+  }
+  100% {
+    visibility: hidden;
+    opacity: 0;
+    transform: translate(0, 0) scale(1.7);
+  }
+}
+
+@keyframes dim-kitchen {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  65%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes show-reviews {
+  0%,
+  64% {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.96);
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
   }
 }
 

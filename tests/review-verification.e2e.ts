@@ -23,22 +23,18 @@ async function setup(
     reviewCount?: number;
   } = {},
 ) {
-  const rows = [
-    {
-      id: 'sample',
-      name: sampleName,
-      rating: 5,
-      text: sampleText,
-    },
-    ...Array.from({ length: (options.reviewCount ?? 1) - 1 }, (_, index) => ({
-      id: `sample-${index + 2}`,
-      name: `Customer ${index + 2}`,
-      rating: 4,
-      text: 'A full-length review should still fit inside the wrapper. '
-        .repeat(8)
-        .slice(0, 400),
-    })),
-  ];
+  const rows = Array.from({ length: options.reviewCount ?? 1 }, (_, index) =>
+    index === 0
+      ? { id: 'sample', name: sampleName, rating: 5, text: sampleText }
+      : {
+          id: `sample-${index + 1}`,
+          name: `Customer ${index + 1}`,
+          rating: 4,
+          text: 'A full-length review should still fit inside the wrapper. '
+            .repeat(8)
+            .slice(0, 400),
+        },
+  );
   let submissions = 0;
   await page.route(api, async (route) => {
     if (route.request().method() === 'POST') {
@@ -75,7 +71,7 @@ async function setup(
         }),
   );
   await page.goto('/#reviews');
-  if (!options.pendingLoad && !options.loadFailed)
+  if (rows.length && !options.pendingLoad && !options.loadFailed)
     await expect(page.getByText(sampleName, { exact: true })).toHaveCount(1);
   if (!options.blocked)
     await page.waitForFunction(() => '__reviewVerification' in window);
@@ -203,6 +199,58 @@ test('scrolls wrapped reviews in the jar on mobile and closes with Escape', asyn
   await expect(
     page.getByRole('button', { name: 'Open the cookie jar' }),
   ).toBeFocused();
+});
+
+test('hover lifts the lid and the jar can be dismissed and reopened during entry', async ({
+  page,
+}) => {
+  await setup(page);
+  const trigger = page.getByRole('button', { name: 'Open the cookie jar' });
+  const lid = trigger.locator('img[src*="jar-lid"]');
+  await trigger.scrollIntoViewIfNeeded();
+  await expect(lid).toHaveCSS('transform', 'none');
+  await trigger.hover();
+  await expect
+    .poll(() =>
+      lid.evaluate(
+        (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+      ),
+    )
+    .toBeLessThan(-10);
+
+  const dialog = await openJar(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByText(sampleName)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
+  await expect(trigger).toBeFocused();
+});
+
+test('the empty jar opens with reduced motion and fills after the first review', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await setup(page, { reviewCount: 0 });
+  const trigger = page.getByRole('button', { name: 'Open the cookie jar' });
+  await expect(trigger.locator('img[src*="empty-jar-body"]')).toBeVisible();
+  const dialog = await openJar(page);
+  await expect(dialog.locator(':scope > img')).toBeHidden();
+  await expect(
+    dialog.getByText('Be the first to share your cookie moment.'),
+  ).toBeVisible();
+  await expect(dialog.getByRole('article')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
+
+  await fill(page);
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(trigger.locator('img[src*="empty-jar-body"]')).toHaveCount(0);
+  const filledJar = await openJar(page);
+  await expect(
+    filledJar.getByRole('article').getByText(demoName),
+  ).toBeVisible();
 });
 
 test('a blocked verification script displays a useful error', async ({
