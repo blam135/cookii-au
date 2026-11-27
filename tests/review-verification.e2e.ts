@@ -182,25 +182,24 @@ test('challenge failure is visible and keeps the form', async ({ page }) => {
   ).toBeDisabled();
 });
 
-test('expiry disables submission until a new verification completes', async ({
+test('renewing expired verification on window focus enables sharing without a second status', async ({
   page,
 }) => {
   await setup(page);
+  const share = page.getByRole('button', { name: /Share a little love/ });
+  const formStatus = page.locator('.review-form').getByRole('status');
   await verify(page);
-  await expect(
-    page.getByRole('button', { name: /Share a little love/ }),
-  ).toBeEnabled();
+  await expect(share).toBeEnabled();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await verify(page, 'expired');
-  await expect(page.locator('.review-status')).toContainText(
-    'Verification expired.',
-  );
   await expect(
-    page.getByRole('button', { name: /Share a little love/ }),
-  ).toBeDisabled();
+    formStatus.filter({ hasText: 'Verification expired.' }),
+  ).toBeVisible();
+  await expect(share).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await verify(page);
-  await expect(
-    page.getByRole('button', { name: /Share a little love/ }),
-  ).toBeEnabled();
+  await expect(share).toBeEnabled();
+  await expect(formStatus.filter({ hasText: /\S/ })).toHaveCount(0);
 });
 
 test('a server verification rejection asks for a fresh challenge without losing input', async ({
