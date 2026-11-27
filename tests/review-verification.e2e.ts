@@ -342,20 +342,46 @@ for (const { name, text } of injectionPayloads) {
   });
 }
 
-test('focus and reconnect do not refetch reviews', async ({ page }) => {
+test('returning to the tab reflects a removed review and a reload keeps it removed', async ({
+  page,
+}) => {
   await page.clock.install();
-  let reads = 0;
-  page.on('request', (request) => {
-    if (request.url().endsWith('/reviews') && request.method() === 'GET')
-      reads++;
-  });
   await setup(page);
+  await page.route(api, (route) => route.fulfill({ json: [] }));
+  await page.clock.fastForward(10);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('.review-list')).toContainText(
+    'Be the first to share',
+  );
+  await expect(page.locator('.review-card')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.review-list')).toContainText(
+    'Be the first to share',
+  );
+});
+
+test('publishing after a failed refresh keeps old reviews hidden', async ({
+  page,
+}) => {
+  await setup(page);
+  await page.route(api, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 503, json: {} })
+      : route.fallback(),
+  );
   await page.evaluate(() => {
-    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('offline'));
     window.dispatchEvent(new Event('online'));
   });
-  await page.clock.fastForward(60_000);
-  expect(reads).toBe(1);
+  await expect(page.locator('.review-list')).toContainText(
+    'We couldn’t load reviews.',
+  );
+  await expect(page.locator('.review-card')).toHaveCount(0);
+  await fill(page);
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(page.locator('.review-author')).toHaveText(new RegExp(demoName));
+  await expect(page.locator('.review-card')).toHaveCount(1);
 });
 
 test('failed reads remain visible without automatic retries', async ({

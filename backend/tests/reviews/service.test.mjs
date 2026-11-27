@@ -10,19 +10,9 @@ const command = {
   verificationToken: 'opaque-token',
 };
 
-function setup({
-  cache,
-  allowRead = true,
-  allowSubmit = true,
-  verified = true,
-} = {}) {
+function setup({ allowRead = true, allowSubmit = true, verified = true } = {}) {
   const events = [];
   const state = {
-    getCache: async () => cache,
-    setCache: async (value) => {
-      events.push('cache');
-      cache = value;
-    },
     reserveRead: async () => {
       events.push('reserve-read');
       return allowRead;
@@ -61,46 +51,29 @@ function setup({
   };
   return {
     service: new ReviewService(state, repository, verifier),
-    state,
     events,
   };
 }
 
-test('fresh cached reviews need no quota reservation or provider call', async () => {
-  const { service, events } = setup({ cache: { rows: [row], expires: 2000 } });
-  assert.deepEqual(await service.list(1000), {
-    kind: 'success',
-    reviews: [row],
-  });
-  assert.deepEqual(events, []);
-});
-
-test('list reserves capacity before loading and persists the shared cache', async () => {
-  const { service, state, events } = setup();
-  assert.deepEqual(await service.list(1000), {
-    kind: 'success',
-    reviews: [row],
-  });
-  assert.deepEqual(events, ['reserve-read', 'load', 'cache']);
-  assert.deepEqual(await state.getCache(), { rows: [row], expires: 61000 });
-});
-
-test('read limit serves stale cache or a rate-limited outcome without provider access', async () => {
-  for (const cache of [undefined, { rows: [row], expires: 0 }]) {
-    const { service, events } = setup({ cache, allowRead: false });
-    assert.deepEqual(
-      await service.list(1000),
-      cache ? { kind: 'success', reviews: [row] } : { kind: 'rate-limited' },
-    );
-    assert.deepEqual(events, ['reserve-read']);
+test('each read reserves capacity before querying the repository', async () => {
+  const { service, events } = setup();
+  for (let i = 0; i < 2; i++) {
+    assert.deepEqual(await service.list(1000), {
+      kind: 'success',
+      reviews: [row],
+    });
   }
+  assert.deepEqual(events, ['reserve-read', 'load', 'reserve-read', 'load']);
 });
 
-test('submit reserves, verifies and saves in order; token never reaches repository', async () => {
-  const old = { ...row, id: 'older-review' };
-  const { service, state, events } = setup({
-    cache: { rows: [old], expires: 2000 },
-  });
+test('read quota exhaustion returns a rate-limited outcome before querying', async () => {
+  const { service, events } = setup({ allowRead: false });
+  assert.deepEqual(await service.list(1000), { kind: 'rate-limited' });
+  assert.deepEqual(events, ['reserve-read']);
+});
+
+test('submit reserves, verifies and saves in order without forwarding the token', async () => {
+  const { service, events } = setup();
   assert.deepEqual(await service.submit(command, '192.0.2.1', 1000), {
     kind: 'success',
     reviews: [row],
@@ -110,9 +83,7 @@ test('submit reserves, verifies and saves in order; token never reaches reposito
     'verify',
     'reserve-verified',
     'save',
-    'cache',
   ]);
-  assert.deepEqual(await state.getCache(), { rows: [row, old], expires: 2000 });
 });
 
 test('submit limit rejects before verification and invalid challenge rejects before save', async () => {

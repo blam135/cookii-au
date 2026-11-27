@@ -25,16 +25,14 @@ type DiagnosticEvent =
   | {
       event: 'reviews_storage_failed';
       operation: 'get' | 'put';
-      key: 'cache' | 'budget';
+      key: 'budget';
       reason: FailureReason;
     }
-  | { event: 'reviews_cache_checked'; state: 'missing' | 'fresh' | 'stale' }
   | {
       event: 'reviews_quota_rejected';
       quota:
         | 'attempt_daily'
         | 'read_daily'
-        | 'read_interval'
         | 'submission_daily'
         | 'submission_hourly';
     }

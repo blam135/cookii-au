@@ -127,20 +127,35 @@ test('failed verification consumes attempt budget but preserves verified submiss
   assert.equal(data.get('budget').attempts, 1);
   assert.equal(count(), 0);
 });
-test('persistent read cache bounds Notion calls and fails closed at daily read allowance', async () => {
-  mockFetch();
+test('legacy cached rows and read intervals cannot mask fresh reads or exhausted quotas', async () => {
+  const now = Date.UTC(2026, 10, 27, 12);
+  mock.method(Date, 'now', () => now);
   const { store, ctx, data } = setup();
-  assert.equal((await store.fetch(request('GET'))).status, 200);
-  assert.equal(
-    (await new ReviewsStore(ctx, env).fetch(request('GET'))).status,
-    200,
-  );
-  assert.equal(data.get('budget').reads, 1);
-  const budget = data.get('budget');
-  budget.reads = 1440;
-  data.set('budget', budget);
-  data.delete('cache');
-  assert.equal((await store.fetch(request('GET'))).status, 429);
+  data.set('cache', {
+    expires: now + 60000,
+    rows: [{ id: 'deleted', name: 'Sam', rating: 5, text: 'Removed review' }],
+  });
+  data.set('budget', {
+    day: Math.floor(now / 86400000),
+    reads: 1438,
+    nextRead: now + 60000,
+    submits: 0,
+    ips: {},
+  });
+  const query = mock.method(globalThis, 'fetch', async (url) => {
+    assert.ok(url.endsWith('/query'));
+    return Response.json({ results: [] });
+  });
+  for (const object of [store, new ReviewsStore(ctx, env)]) {
+    const response = await object.fetch(request('GET'));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), []);
+  }
+  assert.equal(data.get('budget').reads, 1440);
+  const limited = await store.fetch(request('GET'));
+  assert.equal(limited.status, 429);
+  assert.deepEqual(await limited.json(), {});
+  assert.equal(query.mock.callCount(), 2);
 });
 test('edge enforces kill switch, origin, method and missing configuration', async () => {
   assert.equal(
@@ -291,7 +306,6 @@ test('request IDs correlate Worker and object logs and replace client IDs', asyn
   assert.equal(response.status, 200);
   const id = response.headers.get('X-Request-Id');
   assert.notEqual(id, clientId);
-  assert.ok(logs.length >= 4);
   assert.ok(logs.every((entry) => entry.requestId === id));
   assert.equal(
     logs.find((entry) => entry.event === 'notion_request_completed').operation,
@@ -301,20 +315,14 @@ test('request IDs correlate Worker and object logs and replace client IDs', asyn
   assert.equal(logs.at(-1).status, 200);
   assert.ok(logs.at(-1).durationMs >= 0);
   logs.length = 0;
-  const cached = await worker.fetch(request('GET'), edgeEnvironment(store));
-  assert.notEqual(cached.headers.get('X-Request-Id'), id);
-  assert.ok(
-    logs.every(
-      (entry) => entry.requestId === cached.headers.get('X-Request-Id'),
-    ),
-  );
+  const next = await worker.fetch(request('GET'), edgeEnvironment(store));
+  assert.equal(next.status, 200);
+  const nextId = next.headers.get('X-Request-Id');
+  assert.notEqual(nextId, id);
+  assert.ok(logs.every((entry) => entry.requestId === nextId));
   assert.equal(
-    logs.find((entry) => entry.event === 'reviews_cache_checked').state,
-    'fresh',
-  );
-  assert.equal(
-    logs.some((entry) => entry.event.startsWith('notion_')),
-    false,
+    logs.find((entry) => entry.event === 'notion_request_completed').operation,
+    'query',
   );
   assertPrivate(logs);
 });
@@ -332,12 +340,8 @@ test('configuration diagnostics contain missing setting names without values', a
   assertPrivate(logs);
 });
 
-for (const [operation, key] of [
-  ['get', 'cache'],
-  ['get', 'budget'],
-  ['put', 'budget'],
-  ['put', 'cache'],
-]) {
+for (const operation of ['get', 'put']) {
+  const key = 'budget';
   test(`storage diagnostics distinguish ${operation} ${key} failures`, async () => {
     const logs = captureDiagnostics();
     mockFetch();

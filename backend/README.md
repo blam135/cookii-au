@@ -23,16 +23,16 @@ src/
     adapters/
       notion.ts            Notion repository
       turnstile.ts         Challenge verification
-      cloudflare.ts        Durable Object, persistent quotas and cache
+      cloudflare.ts        Durable Object and persistent quotas
 scripts/deploy.ts          Deployment configuration and Wrangler runner
 tests/
   reviews/                 Service and HTTP/adapter regression tests
   deployment/              Deployment tooling tests
 ```
 
-Dependencies point toward the review model and ports. The service receives its adapters through interfaces; stateless parsing and validation use functions. HTTP responses stay in the handlers, HTTP helpers and Worker entry point. The Cloudflare adapter composes the service and serializes the entire use case, including quota reservation before external requests and the cache write afterward. Its object name and persistent storage keys remain stable.
+Dependencies point toward the review model and ports. The service receives its adapters through interfaces; stateless parsing and validation use functions. HTTP responses stay in the handlers, HTTP helpers and Worker entry point. The Cloudflare adapter composes the service and serializes the entire use case, including quota reservation before external requests. Its object name and persistent storage keys remain stable.
 
-The current `/reviews` endpoint supports GET (latest 20 reviews) and POST (submit a review). Turnstile verifies submissions before they are sent to Notion. The shared object persists quotas and a 60-second read cache.
+The current `/reviews` endpoint supports GET (latest 20 reviews) and POST (submit a review). Turnstile verifies submissions before they are sent to Notion. Each accepted GET queries Notion. The shared object persists quotas.
 
 ## Reviews request flow
 
@@ -43,14 +43,14 @@ flowchart LR
 
     subgraph DO["ReviewsStore: serialized Durable Object"]
         Handler["Handlers<br/>get-reviews.ts / create-reviews.ts"] --> Service["Review service<br/>service.ts"]
-        Service <--> State["Quotas and cache<br/>adapters/cloudflare.ts"]
+        Service <--> State["Quotas<br/>adapters/cloudflare.ts"]
     end
 
     Service --> Notion["Notion adapter<br/>adapters/notion.ts"]
     Service --> Turnstile["Turnstile adapter<br/>adapters/turnstile.ts"]
 ```
 
-GET returns cached reviews or reads Notion. POST reserves quota and verifies Turnstile before creating a review. The Durable Object serializes quota reservations, external calls and cache updates.
+GET reserves a read and queries Notion for the latest reviews. POST reserves quota and verifies Turnstile before creating a review. The Durable Object serializes quota reservations and external calls.
 
 ## Routing and validation libraries
 
@@ -87,7 +87,7 @@ to clients or logged with input values.
 The custom 4 KB/five-second body reader deliberately stays in place before schema parsing
 and Durable Object dispatch. Hono's general JSON/body-limit/timeout middleware is not a
 replacement for the tested byte counting, stream cancellation, and absolute upload deadline.
-Turnstile verification, persistent quotas, cache, serialization and outbound adapters are
+Turnstile verification, persistent quotas, serialization and outbound adapters are
 unchanged by the routing refactor.
 
 The Notion adapter uses the official `@notionhq/client` SDK for typed endpoint calls. Automatic retries are disabled so each reserved operation makes at most one provider request. A custom fetch preserves the eight-second abort deadline (including response bodies) and rejects redirects; SDK logging is suppressed in favor of the existing allowlisted diagnostics. Review mapping and runtime validation remain application responsibilities.
@@ -117,7 +117,7 @@ NEXT_PUBLIC_REVIEWS_API_URL=https://localhost:8787
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-development-public-site-key
 ```
 
-Run `pnpm run dev` from the repository root and open `http://localhost:3000`. Local Durable Object state is stored under `.wrangler/`; deleting that directory resets local quotas and cache.
+Run `pnpm run dev` from the repository root and open `http://localhost:3000`. Local Durable Object state is stored under `.wrangler/`; deleting that directory resets local quotas.
 
 ## Configuration
 
@@ -135,7 +135,7 @@ For manual deployment, non-secret settings belong in `wrangler.jsonc` and privat
 
 ## Limits and deployment
 
-The shared object allows 3 valid-shaped verification attempts per IP per fixed hour and at most 1,000 attempts per UTC day across all IPs. Failed verification consumes these attempt limits, but not the separate 100 verified submission reservations per UTC day. Notion failures consume a verified reservation because the write may have succeeded. The attempt cap is an intentional availability/cost tradeoff: a distributed attack can still exhaust it. Before object dispatch, Cloudflare rate-limit bindings throttle GET to approximately 60 requests per IP per minute and POST to 10, per Cloudflare location. These edge limits are approximate; the object enforces strict persistent quotas. Reads refresh at most once per minute, with a 1,440-attempt daily cap. Existing stale cache can be served when the read allowance is exhausted.
+The shared object allows 3 valid-shaped verification attempts per IP per fixed hour and at most 1,000 attempts per UTC day across all IPs. Failed verification consumes these attempt limits, but not the separate 100 verified submission reservations per UTC day. Notion failures consume a verified reservation because the write may have succeeded. The attempt cap is an intentional availability/cost tradeoff: a distributed attack can still exhaust it. Before object dispatch, Cloudflare rate-limit bindings throttle GET to approximately 60 requests per IP per minute and POST to 10, per Cloudflare location. These edge limits are approximate; the object enforces strict persistent quotas. Each admitted GET spends one of 1,440 shared Notion read attempts per UTC day. After the allowance runs out, GET returns HTTP 429.
 
 ```sh
 pnpm --filter cookii-reviews-worker check
@@ -155,8 +155,8 @@ After deployment, run `curl -i https://api.cookii-au.workers.dev/reviews -H 'Ori
 | `reviews_configuration_missing`                                                | Lists missing setting names only; check GitHub configuration and redeploy                                                        |
 | `reviews_submissions_paused`                                                   | `SUBMISSIONS_ENABLED` is not `true`                                                                                              |
 | `reviews_binding_missing`, `reviews_dispatch_failed`, `reviews_store_failed`   | Missing Durable Object binding, failed dispatch, or failed object concurrency boundary                                           |
-| `reviews_storage_failed`                                                       | Identifies `get`/`put` and `cache`/`budget`, without stored values                                                               |
-| `reviews_edge_rate_limited`, `reviews_cache_checked`, `reviews_quota_rejected` | Cache state or the quota that prevented an upstream request                                                                      |
+| `reviews_storage_failed`                                                       | Identifies `get`/`put` and `budget`, without stored values                                                               |
+| `reviews_edge_rate_limited`, `reviews_quota_rejected` | The quota that prevented an upstream request                                                                      |
 | `notion_transport_failed`                                                      | Query/create transport error; includes a fixed error category and duration                                                       |
 | `notion_request_failed`                                                        | Query/create HTTP status, allowlisted Notion error code and duration; 401: token, 403: permissions, 404: source ID or connection |
 | `notion_request_completed`, `notion_response_invalid`                          | Notion HTTP success, followed by JSON/results/page validation failure if processing fails                                        |

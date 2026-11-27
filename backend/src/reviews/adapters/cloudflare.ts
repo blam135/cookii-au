@@ -4,7 +4,6 @@ import {
   RequestDiagnostics,
   REQUEST_ID_HEADER,
 } from '../../diagnostics';
-import type { ReviewCache } from '../model';
 import type { ReviewState } from '../ports';
 import { ReviewService } from '../service';
 import { handleReviewRequest } from '../handlers';
@@ -16,7 +15,6 @@ interface ReviewBudget {
   submits: number;
   attempts?: number;
   reads: number;
-  nextRead?: number;
   ips: Record<string, { hour: number; count: number }>;
 }
 
@@ -35,57 +33,37 @@ class CloudflareReviewState implements ReviewState {
     this.diagnostics = diagnostics;
   }
 
-  private async read<T>(key: 'cache' | 'budget'): Promise<T | undefined> {
+  private async readBudget(): Promise<ReviewBudget | undefined> {
     try {
-      return await this.storage.get<T>(key);
+      return await this.storage.get<ReviewBudget>('budget');
     } catch (error) {
       this.diagnostics.error({
         event: 'reviews_storage_failed',
         operation: 'get',
-        key,
+        key: 'budget',
         reason: failureReason(error),
       });
       throw error;
     }
   }
 
-  private async write(
-    key: 'cache' | 'budget',
-    value: ReviewCache | ReviewBudget,
-  ): Promise<void> {
+  private async writeBudget(budget: ReviewBudget): Promise<void> {
     try {
-      await this.storage.put(key, value);
+      await this.storage.put('budget', budget);
     } catch (error) {
       this.diagnostics.error({
         event: 'reviews_storage_failed',
         operation: 'put',
-        key,
+        key: 'budget',
         reason: failureReason(error),
       });
       throw error;
     }
   }
 
-  async getCache(): Promise<ReviewCache | undefined> {
-    const cache = await this.read<ReviewCache>('cache');
-    this.diagnostics.info({
-      event: 'reviews_cache_checked',
-      state: !cache
-        ? 'missing'
-        : Date.now() < cache.expires
-          ? 'fresh'
-          : 'stale',
-    });
-    return cache;
-  }
-
-  setCache(cache: ReviewCache): Promise<void> {
-    return this.write('cache', cache);
-  }
-
   private async budget(now: number): Promise<ReviewBudget> {
     const day = Math.floor(now / 86400000);
-    const current = await this.read<ReviewBudget>('budget');
+    const current = await this.readBudget();
     return current?.day === day
       ? current
       : { day, submits: 0, reads: 0, ips: {} };
@@ -93,16 +71,15 @@ class CloudflareReviewState implements ReviewState {
 
   async reserveRead(now: number): Promise<boolean> {
     const budget = await this.budget(now);
-    if (budget.reads >= 1440 || now < (budget.nextRead ?? 0)) {
+    if (budget.reads >= 1440) {
       this.diagnostics.info({
         event: 'reviews_quota_rejected',
-        quota: budget.reads >= 1440 ? 'read_daily' : 'read_interval',
+        quota: 'read_daily',
       });
       return false;
     }
     budget.reads++;
-    budget.nextRead = now + 60000;
-    await this.write('budget', budget);
+    await this.writeBudget(budget);
     return true;
   }
 
@@ -117,7 +94,7 @@ class CloudflareReviewState implements ReviewState {
     }
     // Reserve before Notion so failed writes cannot cause unlimited provider calls.
     budget.submits++;
-    await this.write('budget', budget);
+    await this.writeBudget(budget);
     return true;
   }
 
@@ -155,7 +132,7 @@ class CloudflareReviewState implements ReviewState {
     bucket.count++;
     budget.ips[hash] = bucket;
     // Persist reservations before any external request, including failures.
-    await this.write('budget', budget);
+    await this.writeBudget(budget);
     return true;
   }
 }
@@ -173,8 +150,6 @@ export class ReviewsStore {
     const diagnostics = new RequestDiagnostics(
       request.headers.get(REQUEST_ID_HEADER),
     );
-    // Keep the entire use case serialized: quota reservations, external calls,
-    // and cache writes share one boundary. Existing object names/keys are stable.
     try {
       return await this.context.blockConcurrencyWhile(() => {
         // Each request owns its diagnostics; concurrent calls cannot mix IDs.

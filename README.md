@@ -36,7 +36,7 @@ Use `nvm use` to select the patched Node.js version in `.nvmrc`. Supported Node.
 
 The static website calls a Cloudflare Worker → Durable Object → Notion data source. The browser receives only the API URL and public Turnstile site key; the Notion integration token stays in Worker secrets. Reviews publish immediately, without sign-in or moderation. The UI displays the latest 20 reviews.
 
-SWR manages browser review loading and cached results. Focus/reconnect revalidation and automatic read retries are disabled. Successful submissions update that browser cache from the confirmed server response without an extra GET; the Worker still owns shared caching and quotas.
+The browser requests reviews from the Worker on page load, tab focus and reconnect. Each accepted GET queries Notion for the latest 20 reviews. A failed refresh hides the previous results. Successful submissions use the confirmed Notion response to update the list without an extra GET.
 
 React Hook Form owns review form values, submission state, and successful resets. Its Zod resolver trims browser fields before applying the shared schema; failed submissions keep the values, and a submission lock prevents overlapping requests during async validation. The root Zod dependency supplies the resolver’s peer dependency and browser-only normalization.
 
