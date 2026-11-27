@@ -129,7 +129,7 @@ test('publishes a review through the form and loads it after refresh', async ({
   ).toBeVisible();
   expect(submissions()).toBe(1);
   await expect(page.locator('.review-verification-status')).toContainText(
-    'Please complete the verification below.',
+    'Complete verification to share your review.',
   );
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
@@ -214,21 +214,49 @@ test('a server verification rejection asks for a fresh challenge without losing 
   );
 });
 
-test('mobile verification and its errors stay within the viewport', async ({
+test('verification fits the form as the review layout changes columns', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await setup(page);
   await verify(page, 'error');
-  await page.locator('.review-form').scrollIntoViewIfNeeded();
-  await expect(page.locator('.review-verification-status')).toContainText(
-    'Verification failed.',
-  );
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
+  const widget = page.getByLabel('Spam verification');
+  const status = page.locator('.review-verification-status');
+  await expect(status).toContainText('Verification failed.');
+  for (const width of [320, 390, 900, 901, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const [form, heading, list, field, verification, notice] =
+      await Promise.all(
+        [
+          page.locator('.review-form'),
+          page.locator('.reviews-heading'),
+          page.locator('.review-list'),
+          page.getByRole('textbox', { name: 'Your name' }),
+          widget,
+          status,
+        ].map((locator) => locator.boundingBox()),
+      );
+    if (!form || !heading || !list || !field || !verification || !notice)
+      throw new Error('Review layout is missing');
+    expect(form.x).toBeGreaterThanOrEqual(0);
+    expect(form.x + form.width).toBeLessThanOrEqual(width);
+    expect(verification.width).toBeGreaterThanOrEqual(300);
+    expect(verification.width).toBeCloseTo(field.width, 0);
+    expect(verification.x).toBeCloseTo(field.x, 0);
+    expect(verification.height).toBeLessThan(verification.width);
+    expect(notice.y).toBeGreaterThanOrEqual(
+      verification.y + verification.height,
+    );
+    if (width <= 900) {
+      expect(form.x).toBeCloseTo(heading.x, 0);
+      expect(form.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+      expect(list.y).toBeGreaterThanOrEqual(form.y + form.height);
+    } else {
+      expect(form.y).toBeCloseTo(heading.y, 0);
+      expect(heading.x).toBeGreaterThanOrEqual(form.x + form.width);
+      expect(list.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+    }
+  }
 });
 
 test('stored hostile review fields remain text after submission and reload', async ({
