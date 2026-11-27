@@ -1,22 +1,18 @@
-import { CircleAlert, CircleCheck, Info } from 'lucide-react';
+import { CircleAlert, CircleCheck } from 'lucide-react';
 
 export type ReviewFeedback = {
-  tone: 'info' | 'success' | 'error';
+  tone: 'success' | 'error';
   message: string;
 };
 
-const icons = { info: Info, success: CircleCheck, error: CircleAlert };
-
 export default function ReviewStatus({
   feedback,
-  className,
 }: {
   feedback: ReviewFeedback | null;
-  className: string;
 }) {
-  const Icon = icons[feedback?.tone ?? 'info'];
+  const Icon = feedback?.tone === 'success' ? CircleCheck : CircleAlert;
   return (
-    <output className={`review-notice ${className}`} data-tone={feedback?.tone}>
+    <output className="review-status" data-tone={feedback?.tone}>
       {feedback && (
         <>
           <Icon size={17} aria-hidden="true" />

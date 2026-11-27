@@ -1,57 +1,34 @@
 'use client';
 
 import { Turnstile } from '@marsidev/react-turnstile';
-import { useState } from 'react';
-import ReviewStatus, { type ReviewFeedback } from './review-status';
+
+export type ReviewVerificationState = { token: string; error?: string };
 
 export default function ReviewVerification({
-  onToken,
+  onChange,
 }: {
-  onToken: (token: string) => void;
+  onChange: (state: ReviewVerificationState) => void;
 }) {
-  const [status, setStatus] = useState<ReviewFeedback>({
-    tone: 'info',
-    message: 'Loading verification…',
-  });
-  const invalidate = (message: string) => {
-    onToken('');
-    setStatus({ tone: 'error', message });
-  };
+  const invalidate = (error: string) => onChange({ token: '', error });
+  const expire = () => invalidate('Verification expired. Please verify again.');
   return (
-    <div className="review-verification">
-      <Turnstile
-        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''}
-        options={{ size: 'flexible', theme: 'light', action: 'review' }}
-        aria-label="Spam verification"
-        scriptOptions={{
-          onError: () =>
-            invalidate(
-              'We couldn’t load the verification. Please refresh to try again.',
-            ),
-        }}
-        onWidgetLoad={() =>
-          setStatus({
-            tone: 'info',
-            message: 'Complete verification to share your review.',
-          })
-        }
-        onSuccess={(token) => {
-          onToken(token);
-          setStatus({ tone: 'success', message: 'Verification complete.' });
-        }}
-        onExpire={() =>
-          invalidate('Verification expired. Please verify again.')
-        }
-        onError={() =>
+    <Turnstile
+      className="review-verification"
+      siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''}
+      options={{ size: 'flexible', theme: 'light', action: 'review' }}
+      aria-label="Spam verification"
+      scriptOptions={{
+        onError: () =>
           invalidate(
-            'Verification failed. Please try again or refresh the page.',
-          )
-        }
-        onTimeout={() =>
-          invalidate('Verification expired. Please verify again.')
-        }
-      />
-      <ReviewStatus className="review-verification-status" feedback={status} />
-    </div>
+            'We couldn’t load the verification. Please refresh to try again.',
+          ),
+      }}
+      onSuccess={(token) => onChange({ token })}
+      onExpire={expire}
+      onTimeout={expire}
+      onError={() =>
+        invalidate('Verification failed. Please try again or refresh the page.')
+      }
+    />
   );
 }
