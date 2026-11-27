@@ -7,6 +7,7 @@ import { useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
+import ReviewJar from './review-jar';
 import ReviewStatus from './review-status';
 import ReviewVerification, {
   type ReviewVerificationState,
@@ -128,6 +129,7 @@ export default function Reviews() {
           </h2>
           <p>A few kind words from the cookie jar.</p>
         </header>
+        <ReviewJar reviews={reviews} loading={loading} loadError={loadError} />
         <form
           className="review-form"
           onSubmit={submit}
@@ -211,48 +213,6 @@ export default function Reviews() {
               : 'Review submissions will open soon.'}
           </p>
         </form>
-        <div className="review-list" aria-label="Cookie reviews">
-          {loading && <output>Loading sweet words…</output>}
-          {loadError && (
-            <output>
-              We couldn’t load reviews. Please refresh to try again.
-            </output>
-          )}
-          {!loading && !loadError && reviews.length === 0 && (
-            <p>
-              {reviewsConfigured
-                ? 'Be the first to share your cookie moment.'
-                : 'Reviews are coming soon.'}
-            </p>
-          )}
-          {reviews.map((review) => (
-            <article className="review-card" key={review.id}>
-              <div className="review-card-top">
-                <span
-                  className="review-stars"
-                  aria-label={`${review.rating} out of 5 stars`}
-                >
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      size={16}
-                      fill={star <= review.rating ? 'currentColor' : 'none'}
-                      aria-hidden="true"
-                    />
-                  ))}
-                </span>
-                <span className="review-kind">Customer review</span>
-              </div>
-              <blockquote>“{review.text}”</blockquote>
-              <p className="review-author">
-                <span aria-hidden="true">
-                  {review.name.slice(0, 1).toUpperCase()}
-                </span>
-                {review.name}
-              </p>
-            </article>
-          ))}
-        </div>
       </div>
     </section>
   );
