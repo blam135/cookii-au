@@ -8,7 +8,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import ReviewStatus, { type ReviewFeedback } from './review-status';
-import ReviewVerification from './review-verification';
+import ReviewVerification, {
+  type ReviewVerificationState,
+} from './review-verification';
 
 import {
   ReviewError,
@@ -55,7 +57,9 @@ export default function Reviews() {
   const rating = ratingField.value;
   const [hovered, setHovered] = useState(0);
   const [status, setStatus] = useState<ReviewFeedback | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState('');
+  const [verification, setVerification] = useState<ReviewVerificationState>({
+    token: '',
+  });
   const [verificationVersion, setVerificationVersion] = useState(0);
 
   const saving = useRef(false);
@@ -78,7 +82,7 @@ export default function Reviews() {
   }
 
   async function save(input: ReviewInput) {
-    if (!turnstileToken) {
+    if (!verification.token) {
       setStatus({
         tone: 'error',
         message: 'Please complete verification before sharing.',
@@ -87,7 +91,7 @@ export default function Reviews() {
     }
     setStatus(null);
     try {
-      const saved = await saveReview(input, turnstileToken);
+      const saved = await saveReview(input, verification.token);
       // Publish only the confirmed server result; do not spend another GET quota.
       await mutate(
         (current = []) =>
@@ -109,7 +113,7 @@ export default function Reviews() {
             : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
       });
     } finally {
-      setTurnstileToken('');
+      setVerification({ token: '' });
       setVerificationVersion((v) => v + 1);
     }
   }
@@ -130,7 +134,11 @@ export default function Reviews() {
           </h2>
           <p>A few kind words from the cookie jar.</p>
         </header>
-        <form className="review-form" onSubmit={submit}>
+        <form
+          className="review-form"
+          onSubmit={submit}
+          onChange={() => setStatus(null)}
+        >
           <span className="review-form-flourish" aria-hidden="true">
             ✦
           </span>
@@ -191,18 +199,25 @@ export default function Reviews() {
           {reviewsConfigured && (
             <ReviewVerification
               key={verificationVersion}
-              onToken={setTurnstileToken}
+              onChange={setVerification}
             />
           )}
           <button
             className="button button-dark"
             type="submit"
-            disabled={submitting || !reviewsConfigured || !turnstileToken}
+            disabled={submitting || !reviewsConfigured || !verification.token}
           >
             {submitting ? 'Sharing…' : 'Share a little love'}{' '}
             <ArrowUpRight size={17} aria-hidden="true" />
           </button>
-          <ReviewStatus className="review-status" feedback={status} />
+          <ReviewStatus
+            feedback={
+              status ??
+              (verification.error
+                ? { tone: 'error', message: verification.error }
+                : null)
+            }
+          />
           <p className="review-storage-note">
             {reviewsConfigured
               ? 'Your name, rating, and review will be visible to everyone.'
