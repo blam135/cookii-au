@@ -240,7 +240,7 @@
 .card::after {
   content: '';
   width: min(80%, 16rem);
-  height: clamp(3rem, 7vw, 4.5rem);
+  aspect-ratio: 5 / 2;
   background: url('../images/reviews/chocolate-chunk-cookie.webp') center top /
     100% auto no-repeat;
 }
