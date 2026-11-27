@@ -7,6 +7,7 @@ import { useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
+import ReviewStatus, { type ReviewFeedback } from './review-status';
 import ReviewVerification from './review-verification';
 
 import {
@@ -53,7 +54,7 @@ export default function Reviews() {
   const { field: ratingField } = useController({ control, name: 'rating' });
   const rating = ratingField.value;
   const [hovered, setHovered] = useState(0);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<ReviewFeedback | null>(null);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [verificationVersion, setVerificationVersion] = useState(0);
 
@@ -66,7 +67,10 @@ export default function Reviews() {
     saving.current = true;
     try {
       await handleSubmit(save, () =>
-        setStatus('Please add your name and a few words about your cookies.'),
+        setStatus({
+          tone: 'error',
+          message: 'Please add your name and a few words about your cookies.',
+        }),
       )(event);
     } finally {
       saving.current = false;
@@ -75,10 +79,13 @@ export default function Reviews() {
 
   async function save(input: ReviewInput) {
     if (!turnstileToken) {
-      setStatus('Please complete the spam verification.');
+      setStatus({
+        tone: 'error',
+        message: 'Please complete verification before sharing.',
+      });
       return;
     }
-    setStatus('');
+    setStatus(null);
     try {
       const saved = await saveReview(input, turnstileToken);
       // Publish only the confirmed server result; do not spend another GET quota.
@@ -87,15 +94,20 @@ export default function Reviews() {
           [saved, ...current.filter((row) => row.id !== saved.id)].slice(0, 20),
         { revalidate: false },
       );
-      setStatus('A little sweetness, shared. Your review has been published.');
+      setStatus({
+        tone: 'success',
+        message: 'Your review has been published.',
+      });
       reset();
       setHovered(0);
     } catch (error) {
-      setStatus(
-        error instanceof ReviewError && [403, 409, 429].includes(error.status)
-          ? error.message
-          : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
-      );
+      setStatus({
+        tone: 'error',
+        message:
+          error instanceof ReviewError && [403, 409, 429].includes(error.status)
+            ? error.message
+            : 'We couldn’t confirm your review was saved. Please refresh to check before trying again.',
+      });
     } finally {
       setTurnstileToken('');
       setVerificationVersion((v) => v + 1);
@@ -108,60 +120,16 @@ export default function Reviews() {
       id="reviews"
       aria-labelledby="reviews-heading"
     >
-      <div className="reviews-heading" data-reveal>
-        <div>
+      <div className="reviews-layout">
+        <header className="reviews-heading" data-reveal>
           <p className="eyebrow">Little notes, big smiles</p>
           <h2 id="reviews-heading">
             Sweet words.
             <br />
             <em>Happy crumbs.</em>
           </h2>
-        </div>
-        <p>A few kind words from the cookie jar.</p>
-      </div>
-      <div className="reviews-layout">
-        <div className="review-list" aria-label="Cookie reviews">
-          {loading && <output>Loading sweet words…</output>}
-          {loadError && (
-            <output>
-              We couldn’t load reviews. Please refresh to try again.
-            </output>
-          )}
-          {!loading && !loadError && reviews.length === 0 && (
-            <p>
-              {reviewsConfigured
-                ? 'Be the first to share your cookie moment.'
-                : 'Reviews are coming soon.'}
-            </p>
-          )}
-          {reviews.map((review) => (
-            <article className="review-card" key={review.id}>
-              <div className="review-card-top">
-                <span
-                  className="review-stars"
-                  aria-label={`${review.rating} out of 5 stars`}
-                >
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      size={16}
-                      fill={star <= review.rating ? 'currentColor' : 'none'}
-                      aria-hidden="true"
-                    />
-                  ))}
-                </span>
-                <span className="review-kind">Customer review</span>
-              </div>
-              <blockquote>“{review.text}”</blockquote>
-              <p className="review-author">
-                <span aria-hidden="true">
-                  {review.name.slice(0, 1).toUpperCase()}
-                </span>
-                {review.name}
-              </p>
-            </article>
-          ))}
-        </div>
+          <p>A few kind words from the cookie jar.</p>
+        </header>
         <form className="review-form" onSubmit={submit}>
           <span className="review-form-flourish" aria-hidden="true">
             ✦
@@ -234,13 +202,55 @@ export default function Reviews() {
             {submitting ? 'Sharing…' : 'Share a little love'}{' '}
             <ArrowUpRight size={17} aria-hidden="true" />
           </button>
+          <ReviewStatus className="review-status" feedback={status} />
           <p className="review-storage-note">
             {reviewsConfigured
               ? 'Your name, rating, and review will be visible to everyone.'
               : 'Review submissions will open soon.'}
           </p>
-          <output className="review-status">{status}</output>
         </form>
+        <div className="review-list" aria-label="Cookie reviews">
+          {loading && <output>Loading sweet words…</output>}
+          {loadError && (
+            <output>
+              We couldn’t load reviews. Please refresh to try again.
+            </output>
+          )}
+          {!loading && !loadError && reviews.length === 0 && (
+            <p>
+              {reviewsConfigured
+                ? 'Be the first to share your cookie moment.'
+                : 'Reviews are coming soon.'}
+            </p>
+          )}
+          {reviews.map((review) => (
+            <article className="review-card" key={review.id}>
+              <div className="review-card-top">
+                <span
+                  className="review-stars"
+                  aria-label={`${review.rating} out of 5 stars`}
+                >
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      size={16}
+                      fill={star <= review.rating ? 'currentColor' : 'none'}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </span>
+                <span className="review-kind">Customer review</span>
+              </div>
+              <blockquote>“{review.text}”</blockquote>
+              <p className="review-author">
+                <span aria-hidden="true">
+                  {review.name.slice(0, 1).toUpperCase()}
+                </span>
+                {review.name}
+              </p>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );

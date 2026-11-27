@@ -2,22 +2,26 @@
 
 import { Turnstile } from '@marsidev/react-turnstile';
 import { useState } from 'react';
+import ReviewStatus, { type ReviewFeedback } from './review-status';
 
 export default function ReviewVerification({
   onToken,
 }: {
   onToken: (token: string) => void;
 }) {
-  const [status, setStatus] = useState('Loading spam verification…');
+  const [status, setStatus] = useState<ReviewFeedback>({
+    tone: 'info',
+    message: 'Loading verification…',
+  });
   const invalidate = (message: string) => {
     onToken('');
-    setStatus(message);
+    setStatus({ tone: 'error', message });
   };
   return (
-    <>
+    <div className="review-verification">
       <Turnstile
         siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''}
-        options={{ size: 'compact', action: 'review' }}
+        options={{ size: 'flexible', theme: 'light', action: 'review' }}
         aria-label="Spam verification"
         scriptOptions={{
           onError: () =>
@@ -26,11 +30,14 @@ export default function ReviewVerification({
             ),
         }}
         onWidgetLoad={() =>
-          setStatus('Please complete the verification below.')
+          setStatus({
+            tone: 'info',
+            message: 'Complete verification to share your review.',
+          })
         }
         onSuccess={(token) => {
           onToken(token);
-          setStatus('Verification complete.');
+          setStatus({ tone: 'success', message: 'Verification complete.' });
         }}
         onExpire={() =>
           invalidate('Verification expired. Please verify again.')
@@ -44,9 +51,7 @@ export default function ReviewVerification({
           invalidate('Verification expired. Please verify again.')
         }
       />
-      <output className="review-verification-status" aria-live="polite">
-        {status}
-      </output>
-    </>
+      <ReviewStatus className="review-verification-status" feedback={status} />
+    </div>
   );
 }
