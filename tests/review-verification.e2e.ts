@@ -9,6 +9,8 @@ test.skip(
 const api = '**/reviews';
 const demoName = 'UI test customer';
 const demoText = 'A review used only by the isolated browser tests.';
+const sampleName = 'Sample customer';
+const sampleText = 'Sample review for isolated UI checks.';
 
 async function setup(
   page: Page,
@@ -18,16 +20,21 @@ async function setup(
     loadFailed?: boolean;
     pendingLoad?: Promise<void>;
     pendingSave?: Promise<void>;
+    reviewCount?: number;
   } = {},
 ) {
-  const rows = [
-    {
-      id: 'sample',
-      name: 'Sample customer',
-      rating: 5,
-      text: 'Sample review for isolated UI checks.',
-    },
-  ];
+  const rows = Array.from({ length: options.reviewCount ?? 1 }, (_, index) =>
+    index === 0
+      ? { id: 'sample', name: sampleName, rating: 5, text: sampleText }
+      : {
+          id: `sample-${index + 1}`,
+          name: `Customer ${index + 1}`,
+          rating: 4,
+          text: 'A full-length review should still fit inside the wrapper. '
+            .repeat(8)
+            .slice(0, 400),
+        },
+  );
   let submissions = 0;
   await page.route(api, async (route) => {
     if (route.request().method() === 'POST') {
@@ -64,13 +71,18 @@ async function setup(
         }),
   );
   await page.goto('/#reviews');
-  if (!options.pendingLoad && !options.loadFailed)
-    await expect(
-      page.locator('.review-author').filter({ hasText: 'Sample customer' }),
-    ).toBeVisible();
+  if (rows.length && !options.pendingLoad && !options.loadFailed)
+    await expect(page.getByText(sampleName, { exact: true })).toHaveCount(1);
   if (!options.blocked)
     await page.waitForFunction(() => '__reviewVerification' in window);
   return () => submissions;
+}
+
+async function openJar(page: Page) {
+  await page.getByRole('button', { name: 'Open the cookie jar' }).click();
+  const dialog = page.getByRole('dialog', { name: 'The cookie jar' });
+  await expect(dialog).toBeVisible();
+  return dialog;
 }
 
 async function fill(page: Page) {
@@ -104,6 +116,16 @@ test('loads reviews and blocks submission until verification completes', async (
   page,
 }) => {
   const submissions = await setup(page);
+  const trigger = page.getByRole('button', { name: 'Open the cookie jar' });
+  await expect(page.getByRole('dialog')).toBeHidden();
+  const dialog = await openJar(page);
+  const review = dialog.getByRole('article');
+  await expect(review.getByText(sampleText, { exact: false })).toBeVisible();
+  await expect(review.getByText(sampleName)).toBeVisible();
+  await expect(review).toMatchAriaSnapshot('- text: 5 out of 5 stars');
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
   await fill(page);
   await expect(
     page.getByRole('button', { name: /Share a little love/ }),
@@ -128,9 +150,9 @@ test('publishes a review through the form and loads it after refresh', async ({
   await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue(
     '',
   );
-  await expect(
-    page.locator('.review-author').filter({ hasText: demoName }),
-  ).toBeVisible();
+  const dialog = await openJar(page);
+  await expect(dialog.getByText(demoName)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
   expect(submissions()).toBe(1);
   const formStatus = page.locator('.review-form').getByRole('status');
   await expect(formStatus).toBeHidden();
@@ -144,8 +166,90 @@ test('publishes a review through the form and loads it after refresh', async ({
   ).toBeEnabled();
   await expect(formStatus).toBeHidden();
   await page.reload();
+  const reloadedDialog = await openJar(page);
+  await expect(reloadedDialog.getByText(demoName)).toBeVisible();
+});
+
+test('scrolls wrapped reviews in the jar on mobile and closes with Escape', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page, { reviewCount: 12 });
+  const dialog = await openJar(page);
+  const close = dialog.getByRole('button', { name: 'Close cookie jar' });
+  const reviews = dialog.getByRole('region', { name: 'Customer reviews' });
+  const lastReview = reviews.getByText('Customer 12');
+  await expect(reviews.getByRole('article')).toHaveCount(12);
+  await expect(lastReview).not.toBeInViewport();
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(reviews).toBeFocused();
+  const pageScroll = await page.evaluate(() => window.scrollY);
+  await page.keyboard.press('End');
+  await expect(lastReview).toBeInViewport();
+  await expect(close).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(pageScroll);
+  expect(
+    await reviews.evaluate((element) => element.scrollWidth),
+  ).toBeLessThanOrEqual(
+    await reviews.evaluate((element) => element.clientWidth),
+  );
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
   await expect(
-    page.locator('.review-author').filter({ hasText: demoName }),
+    page.getByRole('button', { name: 'Open the cookie jar' }),
+  ).toBeFocused();
+});
+
+test('hover lifts the lid and the jar can be dismissed and reopened during entry', async ({
+  page,
+}) => {
+  await setup(page);
+  const trigger = page.getByRole('button', { name: 'Open the cookie jar' });
+  const lid = trigger.locator('img[src*="jar-lid"]');
+  await trigger.scrollIntoViewIfNeeded();
+  await expect(lid).toHaveCSS('transform', 'none');
+  await trigger.hover();
+  await expect
+    .poll(() =>
+      lid.evaluate(
+        (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+      ),
+    )
+    .toBeLessThan(-10);
+
+  const dialog = await openJar(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByText(sampleName)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
+  await expect(trigger).toBeFocused();
+});
+
+test('the empty jar opens with reduced motion and fills after the first review', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await setup(page, { reviewCount: 0 });
+  const trigger = page.getByRole('button', { name: 'Open the cookie jar' });
+  await expect(trigger.locator('img[src*="empty-jar-body"]')).toBeVisible();
+  const dialog = await openJar(page);
+  await expect(dialog.locator(':scope > img')).toBeHidden();
+  await expect(
+    dialog.getByText('Be the first to share your cookie moment.'),
+  ).toBeVisible();
+  await expect(dialog.getByRole('article')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
+
+  await fill(page);
+  await verify(page);
+  await page.getByRole('button', { name: /Share a little love/ }).click();
+  await expect(trigger.locator('img[src*="empty-jar-body"]')).toHaveCount(0);
+  const filledJar = await openJar(page);
+  await expect(
+    filledJar.getByRole('article').getByText(demoName),
   ).toBeVisible();
 });
 
@@ -228,18 +332,17 @@ test('verification fits the form as the review layout changes columns', async ({
   await expect(status).toContainText('Verification failed.');
   for (const width of [320, 390, 900, 901, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
-    const [form, heading, list, field, verification, notice] =
-      await Promise.all(
-        [
-          page.locator('.review-form'),
-          page.locator('.reviews-heading'),
-          page.locator('.review-list'),
-          page.getByRole('textbox', { name: 'Your name' }),
-          widget,
-          status,
-        ].map((locator) => locator.boundingBox()),
-      );
-    if (!form || !heading || !list || !field || !verification || !notice)
+    const [form, heading, jar, field, verification, notice] = await Promise.all(
+      [
+        page.locator('.review-form'),
+        page.locator('.reviews-heading'),
+        page.getByRole('button', { name: 'Open the cookie jar' }),
+        page.getByRole('textbox', { name: 'Your name' }),
+        widget,
+        status,
+      ].map((locator) => locator.boundingBox()),
+    );
+    if (!form || !heading || !jar || !field || !verification || !notice)
       throw new Error('Review layout is missing');
     expect(form.x).toBeGreaterThanOrEqual(0);
     expect(form.x + form.width).toBeLessThanOrEqual(width);
@@ -256,12 +359,14 @@ test('verification fits the form as the review layout changes columns', async ({
     }
     if (width <= 900) {
       expect(form.x).toBeCloseTo(heading.x, 0);
-      expect(form.y).toBeGreaterThanOrEqual(heading.y + heading.height);
-      expect(list.y).toBeGreaterThanOrEqual(form.y + form.height);
+      expect(jar.x).toBeCloseTo(heading.x, 0);
+      expect(jar.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+      expect(form.y).toBeGreaterThanOrEqual(jar.y + jar.height);
     } else {
       expect(form.y).toBeCloseTo(heading.y, 0);
       expect(heading.x).toBeGreaterThanOrEqual(form.x + form.width);
-      expect(list.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+      expect(jar.x).toBeCloseTo(heading.x, 0);
+      expect(jar.y).toBeGreaterThanOrEqual(heading.y + heading.height);
     }
   }
 });
@@ -284,10 +389,11 @@ test('stored hostile review fields remain text after submission and reload', asy
   await page.getByRole('button', { name: /Share a little love/ }).click();
   for (const reload of [false, true]) {
     if (reload) await page.reload();
-    const review = page.locator('.review-card').filter({ hasText: text });
+    const dialog = await openJar(page);
+    const review = dialog.getByRole('article').filter({ hasText: text });
     await expect(review).toBeVisible();
     await expect(review.locator('blockquote')).toHaveText(`“${text}”`);
-    await expect(review.locator('.review-author')).toContainText(name);
+    await expect(review.getByText(name, { exact: true })).toBeVisible();
     // Assert safe DOM structure even if CSP would independently prevent execution.
     await expect(
       review.locator('[onerror], [onload], script, img, iframe'),
@@ -320,14 +426,15 @@ for (const { name, text } of injectionPayloads) {
       await dialog.dismiss();
     });
     await page.goto('/#reviews');
-    const review = page.locator('.review-card');
+    const dialog = await openJar(page);
+    const review = dialog.getByRole('article');
     await expect(review.locator('blockquote')).toHaveText(`“${text}”`);
     await expect(
       review.locator('script, img, iframe, a, [onerror], [onload]'),
     ).toHaveCount(0);
-    await expect(review.locator('.review-author')).toContainText(
-      '<img src=x onerror=alert(1)>',
-    );
+    await expect(
+      review.getByText('<img src=x onerror=alert(1)>', { exact: true }),
+    ).toBeVisible();
     expect(dialogs).toEqual([]);
   });
 }
@@ -337,17 +444,19 @@ test('returning to the tab reflects a removed review and a reload keeps it remov
 }) => {
   await page.clock.install();
   await setup(page);
+  const dialog = await openJar(page);
   await page.route(api, (route) => route.fulfill({ json: [] }));
   await page.clock.fastForward(10);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.locator('.review-list')).toContainText(
-    'Be the first to share',
-  );
-  await expect(page.locator('.review-card')).toHaveCount(0);
+  await expect(
+    dialog.getByText('Be the first to share', { exact: false }),
+  ).toBeVisible();
+  await expect(dialog.getByRole('article')).toHaveCount(0);
   await page.reload();
-  await expect(page.locator('.review-list')).toContainText(
-    'Be the first to share',
-  );
+  const reloadedDialog = await openJar(page);
+  await expect(
+    reloadedDialog.getByText('Be the first to share', { exact: false }),
+  ).toBeVisible();
 });
 
 test('publishing after a failed refresh keeps old reviews hidden', async ({
@@ -363,15 +472,18 @@ test('publishing after a failed refresh keeps old reviews hidden', async ({
     window.dispatchEvent(new Event('offline'));
     window.dispatchEvent(new Event('online'));
   });
-  await expect(page.locator('.review-list')).toContainText(
-    'We couldn’t load reviews.',
-  );
-  await expect(page.locator('.review-card')).toHaveCount(0);
+  const dialog = await openJar(page);
+  await expect(
+    dialog.getByText('We couldn’t load reviews.', { exact: false }),
+  ).toBeVisible();
+  await expect(dialog.getByRole('article')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close cookie jar' }).click();
   await fill(page);
   await verify(page);
   await page.getByRole('button', { name: /Share a little love/ }).click();
-  await expect(page.locator('.review-author')).toHaveText(new RegExp(demoName));
-  await expect(page.locator('.review-card')).toHaveCount(1);
+  const reopenedDialog = await openJar(page);
+  await expect(reopenedDialog.getByText(demoName)).toBeVisible();
+  await expect(reopenedDialog.getByRole('article')).toHaveCount(1);
 });
 
 test('failed reads remain visible without automatic retries', async ({
@@ -384,9 +496,10 @@ test('failed reads remain visible without automatic retries', async ({
       reads++;
   });
   await setup(page, { loadFailed: true });
-  await expect(page.locator('.review-list')).toContainText(
-    'We couldn’t load reviews.',
-  );
+  const dialog = await openJar(page);
+  await expect(
+    dialog.getByText('We couldn’t load reviews.', { exact: false }),
+  ).toBeVisible();
   await page.clock.fastForward(60_000);
   expect(reads).toBe(1);
 });
@@ -414,10 +527,11 @@ test('a slow initial read cannot replace a confirmed submission or cause another
   } finally {
     release();
   }
-  await expect(page.getByText('Loading sweet words…')).toBeHidden();
+  const dialog = await openJar(page);
+  await expect(dialog.getByText('Loading sweet words…')).toBeHidden();
   await expect(
-    page.locator('.review-card').filter({ hasText: demoText }),
-  ).toHaveCount(1);
+    dialog.getByRole('article').filter({ hasText: demoText }),
+  ).toBeVisible();
   expect(submissions()).toBe(1);
   expect(reads).toBe(1);
 });
